@@ -76,12 +76,18 @@ class Bridge {
             {
                 pid: 1234, name: 'Minecraft.Windows.exe', exePath: 'C:\\...\\Minecraft.Windows.exe',
                 cpuUsage: 45.2, gpuUsage: 12.1,
-                cpuLimited: false, gpuLimited: false, cpuLimitPct: 0, gpuLimitPct: 0
+                memoryUsage: 1024 * 1024 * 512, // 512MB
+                ioReadBytes: 1024 * 100, ioWriteBytes: 1024 * 50,
+                cpuLimited: false, gpuLimited: false, memLimited: false, ioLimited: false,
+                cpuLimitPct: 0, gpuLimitPct: 0, memLimitBytes: 0
             },
             {
                 pid: 5678, name: 'javaw.exe', exePath: 'C:\\...\\javaw.exe',
                 cpuUsage: 22.7, gpuUsage: 5.3,
-                cpuLimited: true, gpuLimited: false, cpuLimitPct: 40, gpuLimitPct: 0
+                memoryUsage: 1024 * 1024 * 256, // 256MB
+                ioReadBytes: 1024 * 30, ioWriteBytes: 1024 * 15,
+                cpuLimited: true, gpuLimited: false, memLimited: false, ioLimited: false,
+                cpuLimitPct: 40, gpuLimitPct: 0, memLimitBytes: 0
             },
         ];
         setTimeout(() => {
@@ -94,6 +100,9 @@ class Bridge {
                 ...p,
                 cpuUsage: Math.random() * 80 + 5,
                 gpuUsage: Math.random() * 30,
+                memoryUsage: Math.floor(Math.random() * 1024 * 1024 * 500 + 100 * 1024 * 1024),
+                ioReadBytes: Math.floor(Math.random() * 1024 * 200),
+                ioWriteBytes: Math.floor(Math.random() * 1024 * 100),
             }));
             this.dispatch('processList', updated);
         }, 2000);

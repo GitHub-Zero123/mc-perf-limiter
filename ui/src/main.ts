@@ -12,6 +12,7 @@ import { themeManager } from './theme'
 let processList: ProcessInfo[] = []
 let selectedPid: number | null = null
 let isMaximized = false
+let systemTotalMemMB = 8192   // 默认 8GB，收到 systemInfo 后更新
 
 // ─── DOM 引用 ─────────────────────────────────────────────────────────────────
 
@@ -423,6 +424,7 @@ function renderDetailPanel(proc: ProcessInfo) {
               <span class="limit-value" id="label-cpu">${proc.cpuLimited ? proc.cpuLimitPct : 50}%</span>
             </div>
           </div>
+          ${proc.cpuLimited ? `<div class="limit-hint">通过限制可用 CPU 核心数生效，任务管理器显示值会有少数浮动</div>` : ''}
 
           <!-- GPU 限制行 -->
           <div class="limit-row2">
@@ -453,10 +455,12 @@ function renderDetailPanel(proc: ProcessInfo) {
               <span class="limit-row2-name">内存</span>
             </div>
             <div class="limit-slider-wrap">
-              <input type="range" id="slider-mem" min="256" max="8192" step="256"
-                value="${proc.memLimited ? Math.round((proc.memLimitBytes || 0) / 1024 / 1024) : 2048}"
+              <input type="range" id="slider-mem" min="256"
+                max="${Math.max(systemTotalMemMB, 1024)}"
+                step="256"
+                value="${proc.memLimited ? Math.round((proc.memLimitBytes || 0) / 1024 / 1024) : Math.round(systemTotalMemMB / 2 / 256) * 256}"
                 ${proc.memLimited ? '' : 'disabled'} />
-              <span class="limit-value" id="label-mem">${proc.memLimited ? Math.round((proc.memLimitBytes || 0) / 1024 / 1024) : 2048} MB</span>
+              <span class="limit-value" id="label-mem">${proc.memLimited ? Math.round((proc.memLimitBytes || 0) / 1024 / 1024) : Math.round(systemTotalMemMB / 2 / 256) * 256} MB</span>
             </div>
           </div>
 
@@ -589,6 +593,12 @@ function updateDetailUsage(proc: ProcessInfo) {
   if (valIoR) valIoR.textContent = formatSpeed(proc.ioReadBytes || 0)
   if (valIoW) valIoW.textContent = formatSpeed(proc.ioWriteBytes || 0)
 }
+
+// ─── 事件：系统信息（总内存）─────────────────────────────────────────────────
+
+bridge.on('systemInfo', ({ totalMemoryMB }) => {
+  systemTotalMemMB = totalMemoryMB
+})
 
 // ─── 事件：限制结果 ───────────────────────────────────────────────────────────
 

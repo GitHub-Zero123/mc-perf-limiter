@@ -105,6 +105,15 @@ int App::run(HINSTANCE hInstance, int nCmdShow) {
             sendEvent(ipc::EVT_THEME_CHANGED,
                 { {"theme", ipc::theme_to_str(t)} });
 
+            // 推送系统信息（总物理内存，单位 MB）
+            MEMORYSTATUSEX ms{};
+            ms.dwLength = sizeof(ms);
+            if (GlobalMemoryStatusEx(&ms)) {
+                uint64_t totalMB = ms.ullTotalPhys / (1024ULL * 1024ULL);
+                sendEvent(ipc::EVT_SYSTEM_INFO,
+                    { {"totalMemoryMB", totalMB} });
+            }
+
             // 启动进程扫描器（每 1000ms 更新一次）
             scanner_->start(
                 [this](const std::vector<ipc::ProcessInfo>& list) {

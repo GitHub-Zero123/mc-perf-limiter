@@ -19,48 +19,33 @@ const btnMaximize = document.getElementById('btn-maximize');
 const btnClose = document.getElementById('btn-close');
 const btnTheme = document.getElementById('btn-theme');
 const btnRefresh = document.getElementById('btn-refresh');
+const btnGithub = document.getElementById('btn-github');
 // ─── 主题下拉菜单 ─────────────────────────────────────────────────────────────
 // 动态创建下拉菜单
 const themeMenu = document.createElement('div');
 themeMenu.className = 'theme-menu';
+// 菜单颜色由CSS根据data-theme控制，这里不硬编码颜色
 themeMenu.innerHTML = `
   <div class="theme-menu-item" data-theme="dark">
-    <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+    <svg class="theme-menu-icon" width="12" height="12" viewBox="0 0 16 16">
       <path d="M6 1a7 7 0 100 14c-3.1 0-5.7-2-6.6-4.8A5 5 0 108.7 2.3 7 7 0 006 1z"/>
     </svg>
     <span class="theme-menu-label">深色</span>
     <span class="theme-menu-check" id="check-dark"></span>
   </div>
   <div class="theme-menu-item" data-theme="light">
-    <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+    <svg class="theme-menu-icon" width="12" height="12" viewBox="0 0 16 16">
       <circle cx="8" cy="8" r="3"/>
-      <path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.2 3.2l1.4 1.4M11.4 11.4l1.4 1.4M3.2 12.8l1.4-1.4M11.4 4.6l1.4-1.4" stroke="currentColor" stroke-width="1.5" fill="none"/>
+      <path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.2 3.2l1.4 1.4M11.4 11.4l1.4 1.4M3.2 12.8l1.4-1.4M11.4 4.6l1.4-1.4" stroke-width="1.5" fill="none"/>
     </svg>
     <span class="theme-menu-label">浅色</span>
     <span class="theme-menu-check" id="check-light"></span>
   </div>
   <div class="theme-menu-sep"></div>
-  <div class="theme-menu-item" data-theme="mica-dark">
-    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2">
-      <rect x="1" y="1" width="14" height="14" rx="2"/>
-      <path d="M1 5h14M5 5v10" opacity=".5"/>
-    </svg>
-    <span class="theme-menu-label">毛玻璃深色</span>
-    <span class="theme-menu-check" id="check-mica-dark"></span>
-  </div>
-  <div class="theme-menu-item" data-theme="mica-light">
-    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2">
-      <rect x="1" y="1" width="14" height="14" rx="2"/>
-      <path d="M1 5h14M5 5v10" opacity=".5"/>
-    </svg>
-    <span class="theme-menu-label">毛玻璃浅色</span>
-    <span class="theme-menu-check" id="check-mica-light"></span>
-  </div>
-  <div class="theme-menu-sep"></div>
   <div class="theme-menu-item" data-theme="system">
-    <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
-      <rect x="1" y="2" width="14" height="10" rx="1" stroke="currentColor" stroke-width="1.2" fill="none"/>
-      <path d="M5 14h6M8 12v2" stroke="currentColor" stroke-width="1.2"/>
+    <svg class="theme-menu-icon" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke-width="1.2">
+      <rect x="1" y="2" width="14" height="10" rx="1"/>
+      <path d="M5 14h6M8 12v2"/>
     </svg>
     <span class="theme-menu-label">跟随系统</span>
     <span class="theme-menu-check" id="check-system"></span>
@@ -71,12 +56,26 @@ function updateThemeMenuChecks() {
     const t = themeManager.getPreference();
     document.getElementById('check-dark').textContent = t === 'dark' ? '✓' : '';
     document.getElementById('check-light').textContent = t === 'light' ? '✓' : '';
-    document.getElementById('check-mica-dark').textContent = t === 'mica-dark' ? '✓' : '';
-    document.getElementById('check-mica-light').textContent = t === 'mica-light' ? '✓' : '';
     document.getElementById('check-system').textContent = t === 'system' ? '✓' : '';
+}
+function updateThemeMenuColors() {
+    // 根据当前主题确定菜单颜色
+    const theme = document.documentElement.getAttribute('data-theme') || 'dark';
+    const isDark = theme === 'dark';
+    // 设置文字颜色
+    const labelColor = isDark ? '#e0e0e3' : '#1a1a1e';
+    const iconColor = isDark ? '#a0a0a8' : '#56565e';
+    themeMenu.querySelectorAll('.theme-menu-label').forEach(el => {
+        el.style.color = labelColor;
+    });
+    themeMenu.querySelectorAll('.theme-menu-icon').forEach(el => {
+        el.style.fill = iconColor;
+        el.style.stroke = iconColor;
+    });
 }
 function showThemeMenu() {
     updateThemeMenuChecks();
+    updateThemeMenuColors();
     const rect = btnTheme.getBoundingClientRect();
     themeMenu.style.right = `${document.documentElement.clientWidth - rect.right}px`;
     themeMenu.style.top = `${rect.bottom + 4}px`;
@@ -104,6 +103,7 @@ themeMenu.querySelectorAll('.theme-menu-item').forEach(item => {
 });
 document.addEventListener('click', () => hideThemeMenu());
 // ─── 标题栏按钮 ───────────────────────────────────────────────────────────────
+btnGithub.addEventListener('click', () => bridge.send({ cmd: 'openUrl', payload: { url: 'https://github.com/GitHub-Zero123/mc-perf-limiter' } }));
 btnMinimize.addEventListener('click', () => bridge.send({ cmd: 'windowControl', payload: { action: 'minimize' } }));
 btnMaximize.addEventListener('click', () => {
     bridge.send({ cmd: 'windowControl', payload: { action: 'maximizeRestore' } });
@@ -344,52 +344,95 @@ function renderDetailPanel(proc) {
               <span class="chart-value" id="val-gpu">${proc.gpuUsage.toFixed(1)}%</span>
             </div>
           </div>
+          <div class="stats-grid">
+            <div class="stat-item">
+              <span class="stat-label">内存占用</span>
+              <span class="stat-value" id="val-mem">${formatBytes(proc.memoryUsage || 0)}</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">IO 读取</span>
+              <span class="stat-value" id="val-io-r">${formatSpeed(proc.ioReadBytes || 0)}</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">IO 写入</span>
+              <span class="stat-value" id="val-io-w">${formatSpeed(proc.ioWriteBytes || 0)}</span>
+            </div>
+          </div>
         </div>
       </div>
 
-      <!-- CPU 限制 -->
+      <!-- 性能限制 -->
       <div class="panel-card">
-        <div class="panel-card-header">
-          <span>CPU 限制</span>
-          <label class="toggle" title="启用/禁用 CPU 限制">
-            <input type="checkbox" id="toggle-cpu" ${proc.cpuLimited ? 'checked' : ''}>
-            <span class="toggle-track"></span>
-            <span class="toggle-thumb"></span>
-          </label>
-        </div>
+        <div class="panel-card-header">性能限制</div>
         <div class="panel-card-body">
-          <div class="limit-row">
-            <span class="limit-label">限制上限</span>
+
+          <!-- CPU 限制行 -->
+          <div class="limit-row2">
+            <div class="limit-row2-left">
+              <label class="toggle" title="启用/禁用 CPU 限制">
+                <input type="checkbox" id="toggle-cpu" ${proc.cpuLimited ? 'checked' : ''}>
+                <span class="toggle-track"></span>
+                <span class="toggle-thumb"></span>
+              </label>
+              <span class="limit-row2-name">CPU</span>
+            </div>
             <div class="limit-slider-wrap">
               <input type="range" id="slider-cpu" min="1" max="99"
-                value="${proc.cpuLimited ? proc.cpuLimitPct : 50}" />
+                value="${proc.cpuLimited ? proc.cpuLimitPct : 50}"
+                ${proc.cpuLimited ? '' : 'disabled'} />
               <span class="limit-value" id="label-cpu">${proc.cpuLimited ? proc.cpuLimitPct : 50}%</span>
             </div>
           </div>
-          <button class="apply-btn" id="btn-apply-cpu">应用 CPU 限制</button>
-        </div>
-      </div>
 
-      <!-- GPU 限制 -->
-      <div class="panel-card">
-        <div class="panel-card-header">
-          <span>GPU 限制</span>
-          <label class="toggle" title="启用/禁用 GPU 限制">
-            <input type="checkbox" id="toggle-gpu" ${proc.gpuLimited ? 'checked' : ''}>
-            <span class="toggle-track"></span>
-            <span class="toggle-thumb"></span>
-          </label>
-        </div>
-        <div class="panel-card-body">
-          <div class="limit-row">
-            <span class="limit-label">限制上限</span>
+          <!-- GPU 限制行 -->
+          <div class="limit-row2">
+            <div class="limit-row2-left">
+              <label class="toggle" title="启用/禁用 GPU 限制">
+                <input type="checkbox" id="toggle-gpu" ${proc.gpuLimited ? 'checked' : ''}>
+                <span class="toggle-track"></span>
+                <span class="toggle-thumb"></span>
+              </label>
+              <span class="limit-row2-name">GPU</span>
+            </div>
             <div class="limit-slider-wrap">
               <input type="range" id="slider-gpu" min="1" max="99"
-                value="${proc.gpuLimited ? proc.gpuLimitPct : 80}" />
+                value="${proc.gpuLimited ? proc.gpuLimitPct : 80}"
+                ${proc.gpuLimited ? '' : 'disabled'} />
               <span class="limit-value" id="label-gpu">${proc.gpuLimited ? proc.gpuLimitPct : 80}%</span>
             </div>
           </div>
-          <button class="apply-btn" id="btn-apply-gpu">应用 GPU 限制</button>
+
+          <!-- 内存限制行 -->
+          <div class="limit-row2">
+            <div class="limit-row2-left">
+              <label class="toggle" title="启用/禁用内存限制">
+                <input type="checkbox" id="toggle-mem" ${proc.memLimited ? 'checked' : ''}>
+                <span class="toggle-track"></span>
+                <span class="toggle-thumb"></span>
+              </label>
+              <span class="limit-row2-name">内存</span>
+            </div>
+            <div class="limit-slider-wrap">
+              <input type="range" id="slider-mem" min="256" max="8192" step="256"
+                value="${proc.memLimited ? Math.round((proc.memLimitBytes || 0) / 1024 / 1024) : 2048}"
+                ${proc.memLimited ? '' : 'disabled'} />
+              <span class="limit-value" id="label-mem">${proc.memLimited ? Math.round((proc.memLimitBytes || 0) / 1024 / 1024) : 2048} MB</span>
+            </div>
+          </div>
+
+          <!-- IO 优先级限制行 -->
+          <div class="limit-row2">
+            <div class="limit-row2-left">
+              <label class="toggle" title="降低 IO 优先级（减少磁盘占用影响）">
+                <input type="checkbox" id="toggle-io" ${proc.ioLimited ? 'checked' : ''}>
+                <span class="toggle-track"></span>
+                <span class="toggle-thumb"></span>
+              </label>
+              <span class="limit-row2-name">IO</span>
+            </div>
+            <div class="limit-hint">降低 IO 优先级，减少对系统磁盘的影响</div>
+          </div>
+
         </div>
       </div>
 
@@ -397,33 +440,87 @@ function renderDetailPanel(proc) {
     bindDetailEvents(proc.pid);
 }
 function bindDetailEvents(pid) {
+    const toggleCpu = document.getElementById('toggle-cpu');
     const sliderCpu = document.getElementById('slider-cpu');
     const labelCpu = document.getElementById('label-cpu');
-    sliderCpu?.addEventListener('input', () => { labelCpu.textContent = `${sliderCpu.value}%`; });
+    const toggleGpu = document.getElementById('toggle-gpu');
     const sliderGpu = document.getElementById('slider-gpu');
     const labelGpu = document.getElementById('label-gpu');
-    sliderGpu?.addEventListener('input', () => { labelGpu.textContent = `${sliderGpu.value}%`; });
-    document.getElementById('btn-apply-cpu')?.addEventListener('click', () => {
-        const enabled = document.getElementById('toggle-cpu').checked;
-        if (enabled) {
+    const toggleMem = document.getElementById('toggle-mem');
+    const sliderMem = document.getElementById('slider-mem');
+    const labelMem = document.getElementById('label-mem');
+    const toggleIo = document.getElementById('toggle-io');
+    // ── CPU 滑块：防抖 300ms 实时生效 ────────────────────────────────────────
+    let cpuTimer = 0;
+    sliderCpu?.addEventListener('input', () => {
+        labelCpu.textContent = `${sliderCpu.value}%`;
+        if (toggleCpu.checked) {
+            clearTimeout(cpuTimer);
+            cpuTimer = window.setTimeout(() => {
+                bridge.send({ cmd: 'setLimit', payload: { pid, cpu: parseInt(sliderCpu.value) } });
+            }, 300);
+        }
+    });
+    // ── GPU 滑块 ──────────────────────────────────────────────────────────────
+    let gpuTimer = 0;
+    sliderGpu?.addEventListener('input', () => {
+        labelGpu.textContent = `${sliderGpu.value}%`;
+        if (toggleGpu.checked) {
+            clearTimeout(gpuTimer);
+            gpuTimer = window.setTimeout(() => {
+                bridge.send({ cmd: 'setLimit', payload: { pid, gpu: parseInt(sliderGpu.value) } });
+            }, 300);
+        }
+    });
+    // ── 内存滑块 ──────────────────────────────────────────────────────────────
+    let memTimer = 0;
+    sliderMem?.addEventListener('input', () => {
+        labelMem.textContent = `${sliderMem.value} MB`;
+        if (toggleMem.checked) {
+            clearTimeout(memTimer);
+            memTimer = window.setTimeout(() => {
+                bridge.send({ cmd: 'setLimit', payload: { pid, memMB: parseInt(sliderMem.value) } });
+            }, 400);
+        }
+    });
+    // ── CPU 开关 ──────────────────────────────────────────────────────────────
+    toggleCpu?.addEventListener('change', () => {
+        sliderCpu.disabled = !toggleCpu.checked;
+        if (toggleCpu.checked) {
             bridge.send({ cmd: 'setLimit', payload: { pid, cpu: parseInt(sliderCpu.value) } });
         }
         else {
-            bridge.send({ cmd: 'removeLimit', payload: { pid } });
+            bridge.send({ cmd: 'setLimit', payload: { pid, cpu: 0 } });
         }
     });
-    document.getElementById('btn-apply-gpu')?.addEventListener('click', () => {
-        const enabled = document.getElementById('toggle-gpu').checked;
-        if (enabled) {
+    // ── GPU 开关 ──────────────────────────────────────────────────────────────
+    toggleGpu?.addEventListener('change', () => {
+        sliderGpu.disabled = !toggleGpu.checked;
+        if (toggleGpu.checked) {
             bridge.send({ cmd: 'setLimit', payload: { pid, gpu: parseInt(sliderGpu.value) } });
         }
         else {
-            bridge.send({ cmd: 'removeLimit', payload: { pid } });
+            bridge.send({ cmd: 'setLimit', payload: { pid, gpu: 0 } });
         }
+    });
+    // ── 内存开关 ──────────────────────────────────────────────────────────────
+    toggleMem?.addEventListener('change', () => {
+        sliderMem.disabled = !toggleMem.checked;
+        if (toggleMem.checked) {
+            bridge.send({ cmd: 'setLimit', payload: { pid, memMB: parseInt(sliderMem.value) } });
+        }
+        else {
+            bridge.send({ cmd: 'setLimit', payload: { pid, memMB: 0 } });
+        }
+    });
+    // ── IO 优先级开关（无滑块，直接生效）────────────────────────────────────
+    toggleIo?.addEventListener('change', () => {
+        bridge.send({ cmd: 'setLimit', payload: { pid, io: toggleIo.checked } });
     });
 }
 // ─── 更新实时使用率 ───────────────────────────────────────────────────────────
 function updateDetailUsage(proc) {
+    // CPU/GPU 进度条
     const barCpu = document.getElementById('bar-cpu');
     const valCpu = document.getElementById('val-cpu');
     const barGpu = document.getElementById('bar-gpu');
@@ -436,6 +533,16 @@ function updateDetailUsage(proc) {
         barGpu.style.width = `${clamp(proc.gpuUsage)}%`;
     if (valGpu)
         valGpu.textContent = `${proc.gpuUsage.toFixed(1)}%`;
+    // 内存、IO 统计
+    const valMem = document.getElementById('val-mem');
+    const valIoR = document.getElementById('val-io-r');
+    const valIoW = document.getElementById('val-io-w');
+    if (valMem)
+        valMem.textContent = formatBytes(proc.memoryUsage || 0);
+    if (valIoR)
+        valIoR.textContent = formatSpeed(proc.ioReadBytes || 0);
+    if (valIoW)
+        valIoW.textContent = formatSpeed(proc.ioWriteBytes || 0);
 }
 // ─── 事件：限制结果 ───────────────────────────────────────────────────────────
 bridge.on('limitApplied', (data) => {
@@ -469,6 +576,24 @@ function truncate(s, maxLen) {
 }
 function clamp(v) {
     return Math.min(Math.max(v, 0), 100);
+}
+/** 格式化字节数为人类可读的单位 */
+function formatBytes(bytes) {
+    if (bytes === 0)
+        return '0 B';
+    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(1024));
+    const value = bytes / Math.pow(1024, i);
+    return `${value.toFixed(1)} ${units[i]}`;
+}
+/** 格式化速度为人类可读的单位 */
+function formatSpeed(bytesPerSec) {
+    if (bytesPerSec === 0)
+        return '0 B/s';
+    const units = ['B/s', 'KB/s', 'MB/s', 'GB/s'];
+    const i = Math.floor(Math.log(bytesPerSec) / Math.log(1024));
+    const value = bytesPerSec / Math.pow(1024, i);
+    return `${value.toFixed(1)} ${units[i]}`;
 }
 // ─── 侧边栏拖拽 Resize ────────────────────────────────────────────────────────
 ;

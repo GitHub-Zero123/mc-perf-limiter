@@ -24,16 +24,14 @@ public:
 
 private:
     struct GpuEntry {
-        HANDLE   hProcess  = INVALID_HANDLE_VALUE;
-        uint32_t limitPct  = 0;
-        // 原始优先级（用于恢复）
-        DWORD    origPriority = NORMAL_PRIORITY_CLASS;
+        HANDLE   hProcess       = INVALID_HANDLE_VALUE;
+        uint32_t limitPct       = 0;
+        DWORD    origPriority   = NORMAL_PRIORITY_CLASS;
+        int      origGpuPriority = 2;   // D3DKMT_SCHEDULINGPRIORITYCLASS_NORMAL
+        bool     gpuPrioritySet = false;
     };
     std::unordered_map<uint32_t, GpuEntry> entries_;
 
-    // 通过 ProcessPowerThrottling 限制 GPU 调度
-    bool applyPowerThrottling(uint32_t pid, uint32_t percent, GpuEntry& entry);
-
     // 恢复原始设置
-    static void restoreEntry(GpuEntry& e);
+    void restoreEntry(GpuEntry& e);
 };

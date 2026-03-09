@@ -44,6 +44,7 @@ export interface EventMap {
   statsUpdate:  { pid: number; cpu: number; gpu: number }
   themeChanged: { theme: 'dark' | 'light' }
   windowState:  { maximized: boolean }
+  systemInfo:   { totalMemoryMB: number }   // 系统总物理内存（MB）
   error:        { message: string }
 }
 
