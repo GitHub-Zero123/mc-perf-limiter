@@ -1,7 +1,7 @@
 # MCPerfLimiter
 一款专为Minecraft设计的性能限制工具，用于模拟低性能环境，帮助开发者测试和优化游戏性能。
 
-![main](res/main.png)
+![main](./res/main.png)
 
 ## CPU限制
 通过调节CPU亲和性和优先级，限制Minecraft使用的CPU资源，从而降低游戏性能。
