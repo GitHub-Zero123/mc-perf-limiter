@@ -4,6 +4,8 @@
 #include "process_scanner.h"
 #include "cpu_limiter.h"
 #include "gpu_limiter.h"
+#include "memory_limiter.h"
+#include "io_limiter.h"
 #include "theme_detector.h"
 #include "ipc_types.h"
 #include <nlohmann/json.hpp>
@@ -27,6 +29,8 @@ private:
     std::unique_ptr<ProcessScanner> scanner_;
     std::unique_ptr<CpuLimiter>     cpuLimiter_;
     std::unique_ptr<GpuLimiter>     gpuLimiter_;
+    std::unique_ptr<MemoryLimiter>  memLimiter_;
+    std::unique_ptr<IoLimiter>      ioLimiter_;
     std::unique_ptr<ThemeDetector>  themeDetector_;
 
     std::wstring uiDir_;
@@ -47,6 +51,7 @@ private:
     void handleSetTheme(const nlohmann::json& payload);
     void handleWindowControl(const nlohmann::json& payload);
     void handleGetSystemTheme();
+    void handleOpenUrl(const nlohmann::json& payload);
 
     // ── 向 JS 发送事件 ────────────────────────────────────────
     void sendEvent(const std::string& event, const nlohmann::json& data);

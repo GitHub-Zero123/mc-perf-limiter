@@ -6,6 +6,7 @@
 #endif
 #include "app.h"
 #include <windows.h>
+#include <shellapi.h>
 #include <nlohmann/json.hpp>
 #include <string>
 #include <stdexcept>
@@ -45,6 +46,8 @@ App::App()
     , scanner_      (std::make_unique<ProcessScanner>())
     , cpuLimiter_   (std::make_unique<CpuLimiter>())
     , gpuLimiter_   (std::make_unique<GpuLimiter>())
+    , memLimiter_   (std::make_unique<MemoryLimiter>())
+    , ioLimiter_    (std::make_unique<IoLimiter>())
     , themeDetector_(std::make_unique<ThemeDetector>())
 {}
 
@@ -52,6 +55,8 @@ App::~App() {
     scanner_->stop();
     cpuLimiter_->removeAll();
     gpuLimiter_->removeAll();
+    memLimiter_->removeAll();
+    ioLimiter_->removeAll();
 }
 
 // ─── 解析 UI 目录 ─────────────────────────────────────────────────────────────
@@ -150,6 +155,7 @@ void App::onMessage(const std::string& jsonStr) {
         else if (cmd == ipc::CMD_SET_THEME)        handleSetTheme(payload);
         else if (cmd == ipc::CMD_WINDOW_CONTROL)   handleWindowControl(payload);
         else if (cmd == ipc::CMD_GET_SYSTEM_THEME) handleGetSystemTheme();
+        else if (cmd == ipc::CMD_OPEN_URL)         handleOpenUrl(payload);
     } catch (const std::exception& e) {
         sendError(e.what());
     }
@@ -166,21 +172,48 @@ void App::handleSetLimit(const json& payload) {
     uint32_t pid        = payload.value("pid", 0u);
     int      cpuPercent = payload.value("cpu", -1);
     int      gpuPercent = payload.value("gpu", -1);
+    int64_t  memMB      = payload.value("memMB", int64_t(-1));
+    bool     ioLimit    = payload.value("io", false);
+    bool     hasIo      = payload.contains("io");
 
     if (pid == 0) { sendError("Invalid PID"); return; }
 
-    bool cpuOk = true, gpuOk = true;
+    bool cpuOk = true, gpuOk = true, memOk = true, ioOk = true;
+
     if (cpuPercent >= 1 && cpuPercent <= 99)
         cpuOk = cpuLimiter_->applyLimit(pid, static_cast<uint32_t>(cpuPercent));
+    else if (cpuPercent == 0)
+        cpuLimiter_->removeLimit(pid);
+
     if (gpuPercent >= 1 && gpuPercent <= 99)
         gpuOk = gpuLimiter_->applyLimit(pid, static_cast<uint32_t>(gpuPercent));
+    else if (gpuPercent == 0)
+        gpuLimiter_->removeLimit(pid);
+
+    if (memMB > 0) {
+        uint64_t bytes = static_cast<uint64_t>(memMB) * 1024 * 1024;
+        memOk = memLimiter_->applyLimit(pid, bytes);
+    } else if (memMB == 0) {
+        memLimiter_->removeLimit(pid);
+    }
+
+    if (hasIo) {
+        if (ioLimit)
+            ioOk = ioLimiter_->applyLimit(pid);
+        else
+            ioLimiter_->removeLimit(pid);
+    }
 
     sendEvent(ipc::EVT_LIMIT_APPLIED, {
-        {"pid",     pid},
-        {"cpu_ok",  cpuOk},
-        {"gpu_ok",  gpuOk},
-        {"cpu_pct", cpuPercent},
-        {"gpu_pct", gpuPercent}
+        {"pid",      pid},
+        {"cpu_ok",   cpuOk},
+        {"gpu_ok",   gpuOk},
+        {"mem_ok",   memOk},
+        {"io_ok",    ioOk},
+        {"cpu_pct",  cpuPercent},
+        {"gpu_pct",  gpuPercent},
+        {"mem_mb",   memMB},
+        {"io_limit", ioLimit}
     });
 }
 
@@ -190,6 +223,8 @@ void App::handleRemoveLimit(const json& payload) {
 
     cpuLimiter_->removeLimit(pid);
     gpuLimiter_->removeLimit(pid);
+    memLimiter_->removeLimit(pid);
+    ioLimiter_->removeLimit(pid);
 
     sendEvent(ipc::EVT_LIMIT_REMOVED, { {"pid", pid} });
 }
@@ -229,6 +264,15 @@ void App::handleGetSystemTheme() {
         themeDetector_->userPreference());
     sendEvent(ipc::EVT_THEME_CHANGED,
         { {"theme", ipc::theme_to_str(effective)} });
+}
+
+void App::handleOpenUrl(const json& payload) {
+    std::string url = payload.value("url", "");
+    if (url.empty()) return;
+    // ShellExecuteW 打开默认浏览器
+    ShellExecuteW(nullptr, L"open",
+                  to_wide(url).c_str(),
+                  nullptr, nullptr, SW_SHOWNORMAL);
 }
 
 // ─── 向 JS 发送事件 ───────────────────────────────────────────────────────────
@@ -272,21 +316,22 @@ void App::flushProcessList() {
     json arr = json::array();
     for (const auto& p : list) {
         arr.push_back({
-            {"pid",          p.pid},
-            {"name",         p.name},
-            {"exePath",      p.exePath},
-            {"cpuUsage",     p.cpuUsage},
-            {"gpuUsage",     p.gpuUsage},
-            {"memoryUsage",  p.memoryUsage},
-            {"ioReadBytes",  p.ioReadBytes},
-            {"ioWriteBytes", p.ioWriteBytes},
-            {"netRecvBytes", p.netRecvBytes},
-            {"netSendBytes", p.netSendBytes},
-            {"cpuLimited",   cpuLimiter_->hasLimit(p.pid)},
-            {"gpuLimited",   gpuLimiter_->hasLimit(p.pid)},
-            {"cpuLimitPct",  cpuLimiter_->getLimit(p.pid)},
-            {"gpuLimitPct",  gpuLimiter_->getLimit(p.pid)},
-            {"iconBase64",   p.iconBase64}
+            {"pid",           p.pid},
+            {"name",          p.name},
+            {"exePath",       p.exePath},
+            {"cpuUsage",      p.cpuUsage},
+            {"gpuUsage",      p.gpuUsage},
+            {"memoryUsage",   p.memoryUsage},
+            {"ioReadBytes",   p.ioReadBytes},
+            {"ioWriteBytes",  p.ioWriteBytes},
+            {"cpuLimited",    cpuLimiter_->hasLimit(p.pid)},
+            {"gpuLimited",    gpuLimiter_->hasLimit(p.pid)},
+            {"memLimited",    memLimiter_->hasLimit(p.pid)},
+            {"ioLimited",     ioLimiter_->hasLimit(p.pid)},
+            {"cpuLimitPct",   cpuLimiter_->getLimit(p.pid)},
+            {"gpuLimitPct",   gpuLimiter_->getLimit(p.pid)},
+            {"memLimitBytes", memLimiter_->getLimit(p.pid)},
+            {"iconBase64",    p.iconBase64}
         });
     }
     sendEvent(ipc::EVT_PROCESS_LIST, arr);

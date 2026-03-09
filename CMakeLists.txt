@@ -46,6 +46,7 @@ target_link_libraries(MCPerfLimiter PRIVATE
     gdi32
     ole32
     oleaut32
+    shell32     # ShellExecuteW
     shlwapi
     version
     dwmapi

@@ -24,6 +24,7 @@ const btnMaximize    = document.getElementById('btn-maximize')!
 const btnClose       = document.getElementById('btn-close')!
 const btnTheme       = document.getElementById('btn-theme')!
 const btnRefresh     = document.getElementById('btn-refresh')!
+const btnGithub      = document.getElementById('btn-github')!
 
 // ─── 主题下拉菜单 ─────────────────────────────────────────────────────────────
 
@@ -119,6 +120,9 @@ themeMenu.querySelectorAll<HTMLElement>('.theme-menu-item').forEach(item => {
 document.addEventListener('click', () => hideThemeMenu())
 
 // ─── 标题栏按钮 ───────────────────────────────────────────────────────────────
+
+btnGithub.addEventListener('click', () =>
+  bridge.send({ cmd: 'openUrl', payload: { url: 'https://github.com/GitHub-Zero123/mc-perf-limiter' } }))
 
 btnMinimize.addEventListener('click', () =>
   bridge.send({ cmd: 'windowControl', payload: { action: 'minimize' } }))
@@ -397,49 +401,78 @@ function renderDetailPanel(proc: ProcessInfo) {
         </div>
       </div>
 
-      <!-- CPU 限制 -->
+      <!-- 性能限制 -->
       <div class="panel-card">
-        <div class="panel-card-header">
-          <span>CPU 限制</span>
-          <label class="toggle" title="启用/禁用 CPU 限制">
-            <input type="checkbox" id="toggle-cpu" ${proc.cpuLimited ? 'checked' : ''}>
-            <span class="toggle-track"></span>
-            <span class="toggle-thumb"></span>
-          </label>
-        </div>
+        <div class="panel-card-header">性能限制</div>
         <div class="panel-card-body">
-          <div class="limit-row">
-            <span class="limit-label">限制上限</span>
+
+          <!-- CPU 限制行 -->
+          <div class="limit-row2">
+            <div class="limit-row2-left">
+              <label class="toggle" title="启用/禁用 CPU 限制">
+                <input type="checkbox" id="toggle-cpu" ${proc.cpuLimited ? 'checked' : ''}>
+                <span class="toggle-track"></span>
+                <span class="toggle-thumb"></span>
+              </label>
+              <span class="limit-row2-name">CPU</span>
+            </div>
             <div class="limit-slider-wrap">
               <input type="range" id="slider-cpu" min="1" max="99"
-                value="${proc.cpuLimited ? proc.cpuLimitPct : 50}" />
+                value="${proc.cpuLimited ? proc.cpuLimitPct : 50}"
+                ${proc.cpuLimited ? '' : 'disabled'} />
               <span class="limit-value" id="label-cpu">${proc.cpuLimited ? proc.cpuLimitPct : 50}%</span>
             </div>
           </div>
-          <button class="apply-btn" id="btn-apply-cpu">应用 CPU 限制</button>
-        </div>
-      </div>
 
-      <!-- GPU 限制 -->
-      <div class="panel-card">
-        <div class="panel-card-header">
-          <span>GPU 限制</span>
-          <label class="toggle" title="启用/禁用 GPU 限制">
-            <input type="checkbox" id="toggle-gpu" ${proc.gpuLimited ? 'checked' : ''}>
-            <span class="toggle-track"></span>
-            <span class="toggle-thumb"></span>
-          </label>
-        </div>
-        <div class="panel-card-body">
-          <div class="limit-row">
-            <span class="limit-label">限制上限</span>
+          <!-- GPU 限制行 -->
+          <div class="limit-row2">
+            <div class="limit-row2-left">
+              <label class="toggle" title="启用/禁用 GPU 限制">
+                <input type="checkbox" id="toggle-gpu" ${proc.gpuLimited ? 'checked' : ''}>
+                <span class="toggle-track"></span>
+                <span class="toggle-thumb"></span>
+              </label>
+              <span class="limit-row2-name">GPU</span>
+            </div>
             <div class="limit-slider-wrap">
               <input type="range" id="slider-gpu" min="1" max="99"
-                value="${proc.gpuLimited ? proc.gpuLimitPct : 80}" />
+                value="${proc.gpuLimited ? proc.gpuLimitPct : 80}"
+                ${proc.gpuLimited ? '' : 'disabled'} />
               <span class="limit-value" id="label-gpu">${proc.gpuLimited ? proc.gpuLimitPct : 80}%</span>
             </div>
           </div>
-          <button class="apply-btn" id="btn-apply-gpu">应用 GPU 限制</button>
+
+          <!-- 内存限制行 -->
+          <div class="limit-row2">
+            <div class="limit-row2-left">
+              <label class="toggle" title="启用/禁用内存限制">
+                <input type="checkbox" id="toggle-mem" ${proc.memLimited ? 'checked' : ''}>
+                <span class="toggle-track"></span>
+                <span class="toggle-thumb"></span>
+              </label>
+              <span class="limit-row2-name">内存</span>
+            </div>
+            <div class="limit-slider-wrap">
+              <input type="range" id="slider-mem" min="256" max="8192" step="256"
+                value="${proc.memLimited ? Math.round((proc.memLimitBytes || 0) / 1024 / 1024) : 2048}"
+                ${proc.memLimited ? '' : 'disabled'} />
+              <span class="limit-value" id="label-mem">${proc.memLimited ? Math.round((proc.memLimitBytes || 0) / 1024 / 1024) : 2048} MB</span>
+            </div>
+          </div>
+
+          <!-- IO 优先级限制行 -->
+          <div class="limit-row2">
+            <div class="limit-row2-left">
+              <label class="toggle" title="降低 IO 优先级（减少磁盘占用影响）">
+                <input type="checkbox" id="toggle-io" ${proc.ioLimited ? 'checked' : ''}>
+                <span class="toggle-track"></span>
+                <span class="toggle-thumb"></span>
+              </label>
+              <span class="limit-row2-name">IO</span>
+            </div>
+            <div class="limit-hint">降低 IO 优先级，减少对系统磁盘的影响</div>
+          </div>
+
         </div>
       </div>
 
@@ -449,30 +482,89 @@ function renderDetailPanel(proc: ProcessInfo) {
 }
 
 function bindDetailEvents(pid: number) {
+  const toggleCpu = document.getElementById('toggle-cpu') as HTMLInputElement
   const sliderCpu = document.getElementById('slider-cpu') as HTMLInputElement
   const labelCpu  = document.getElementById('label-cpu')!
-  sliderCpu?.addEventListener('input', () => { labelCpu.textContent = `${sliderCpu.value}%` })
 
+  const toggleGpu = document.getElementById('toggle-gpu') as HTMLInputElement
   const sliderGpu = document.getElementById('slider-gpu') as HTMLInputElement
   const labelGpu  = document.getElementById('label-gpu')!
-  sliderGpu?.addEventListener('input', () => { labelGpu.textContent = `${sliderGpu.value}%` })
 
-  document.getElementById('btn-apply-cpu')?.addEventListener('click', () => {
-    const enabled = (document.getElementById('toggle-cpu') as HTMLInputElement).checked
-    if (enabled) {
-      bridge.send({ cmd: 'setLimit', payload: { pid, cpu: parseInt(sliderCpu.value) } })
-    } else {
-      bridge.send({ cmd: 'removeLimit', payload: { pid } })
+  const toggleMem = document.getElementById('toggle-mem') as HTMLInputElement
+  const sliderMem = document.getElementById('slider-mem') as HTMLInputElement
+  const labelMem  = document.getElementById('label-mem')!
+
+  const toggleIo  = document.getElementById('toggle-io') as HTMLInputElement
+
+  // ── CPU 滑块：防抖 300ms 实时生效 ────────────────────────────────────────
+  let cpuTimer = 0
+  sliderCpu?.addEventListener('input', () => {
+    labelCpu.textContent = `${sliderCpu.value}%`
+    if (toggleCpu.checked) {
+      clearTimeout(cpuTimer)
+      cpuTimer = window.setTimeout(() => {
+        bridge.send({ cmd: 'setLimit', payload: { pid, cpu: parseInt(sliderCpu.value) } })
+      }, 300)
     }
   })
 
-  document.getElementById('btn-apply-gpu')?.addEventListener('click', () => {
-    const enabled = (document.getElementById('toggle-gpu') as HTMLInputElement).checked
-    if (enabled) {
+  // ── GPU 滑块 ──────────────────────────────────────────────────────────────
+  let gpuTimer = 0
+  sliderGpu?.addEventListener('input', () => {
+    labelGpu.textContent = `${sliderGpu.value}%`
+    if (toggleGpu.checked) {
+      clearTimeout(gpuTimer)
+      gpuTimer = window.setTimeout(() => {
+        bridge.send({ cmd: 'setLimit', payload: { pid, gpu: parseInt(sliderGpu.value) } })
+      }, 300)
+    }
+  })
+
+  // ── 内存滑块 ──────────────────────────────────────────────────────────────
+  let memTimer = 0
+  sliderMem?.addEventListener('input', () => {
+    labelMem.textContent = `${sliderMem.value} MB`
+    if (toggleMem.checked) {
+      clearTimeout(memTimer)
+      memTimer = window.setTimeout(() => {
+        bridge.send({ cmd: 'setLimit', payload: { pid, memMB: parseInt(sliderMem.value) } })
+      }, 400)
+    }
+  })
+
+  // ── CPU 开关 ──────────────────────────────────────────────────────────────
+  toggleCpu?.addEventListener('change', () => {
+    sliderCpu.disabled = !toggleCpu.checked
+    if (toggleCpu.checked) {
+      bridge.send({ cmd: 'setLimit', payload: { pid, cpu: parseInt(sliderCpu.value) } })
+    } else {
+      bridge.send({ cmd: 'setLimit', payload: { pid, cpu: 0 } })
+    }
+  })
+
+  // ── GPU 开关 ──────────────────────────────────────────────────────────────
+  toggleGpu?.addEventListener('change', () => {
+    sliderGpu.disabled = !toggleGpu.checked
+    if (toggleGpu.checked) {
       bridge.send({ cmd: 'setLimit', payload: { pid, gpu: parseInt(sliderGpu.value) } })
     } else {
-      bridge.send({ cmd: 'removeLimit', payload: { pid } })
+      bridge.send({ cmd: 'setLimit', payload: { pid, gpu: 0 } })
     }
+  })
+
+  // ── 内存开关 ──────────────────────────────────────────────────────────────
+  toggleMem?.addEventListener('change', () => {
+    sliderMem.disabled = !toggleMem.checked
+    if (toggleMem.checked) {
+      bridge.send({ cmd: 'setLimit', payload: { pid, memMB: parseInt(sliderMem.value) } })
+    } else {
+      bridge.send({ cmd: 'setLimit', payload: { pid, memMB: 0 } })
+    }
+  })
+
+  // ── IO 优先级开关（无滑块，直接生效）────────────────────────────────────
+  toggleIo?.addEventListener('change', () => {
+    bridge.send({ cmd: 'setLimit', payload: { pid, io: toggleIo.checked } })
   })
 }
 

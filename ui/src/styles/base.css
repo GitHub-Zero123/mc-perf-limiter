@@ -245,6 +245,17 @@ button, input, select {
   margin-right: 4px;
 }
 
+.wc-btn--github {
+  width: 32px;
+  margin-right: 2px;
+  opacity: 0.65;
+}
+
+.wc-btn--github:hover {
+  opacity: 1;
+  background: var(--bg-hover);
+}
+
 .wc-btn--close:hover {
   background: var(--accent-danger);
   color: #ffffff;
@@ -597,6 +608,38 @@ button, input, select {
 }
 
 /* ── 限制控制 ────────────────────────────────────────────────────── */
+
+/* 新式：开关 + 名称 + 滑块 一行式布局 */
+.limit-row2 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.limit-row2:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.limit-row2-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 64px;
+  flex-shrink: 0;
+}
+
+.limit-row2-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  letter-spacing: 0.3px;
+  min-width: 28px;
+}
+
+/* 旧式（兼容保留） */
 .limit-row {
   display: flex;
   align-items: center;
@@ -624,6 +667,11 @@ input[type="range"] {
   height: 3px;
 }
 
+input[type="range"]:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
 .limit-value {
   width: 38px;
   text-align: right;
@@ -631,6 +679,15 @@ input[type="range"] {
   font-family: 'Cascadia Code', 'Consolas', monospace;
   color: var(--text-primary);
   flex-shrink: 0;
+}
+
+/* IO 行提示文字 */
+.limit-hint {
+  flex: 1;
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-style: italic;
+  padding: 0 4px;
 }
 
 /* 切换开关 */

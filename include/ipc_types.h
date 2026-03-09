@@ -16,6 +16,7 @@ inline constexpr const char* CMD_REMOVE_LIMIT     = "removeLimit";
 inline constexpr const char* CMD_SET_THEME        = "setTheme";
 inline constexpr const char* CMD_WINDOW_CONTROL   = "windowControl";
 inline constexpr const char* CMD_GET_SYSTEM_THEME = "getSystemTheme";
+inline constexpr const char* CMD_OPEN_URL         = "openUrl";
 
 // ─── C++ → JS 事件 ─────────────────────────────────────────
 inline constexpr const char* EVT_PROCESS_LIST     = "processList";
@@ -57,19 +58,25 @@ struct ProcessInfo {
     uint64_t    memoryUsage;    // 内存使用量（字节）
     uint64_t    ioReadBytes;    // IO 读取字节/秒
     uint64_t    ioWriteBytes;   // IO 写入字节/秒
-    uint64_t    netRecvBytes;   // 网络接收字节/秒
-    uint64_t    netSendBytes;   // 网络发送字节/秒
+    uint64_t    netRecvBytes;   // 网络接收字节/秒（暂未实现）
+    uint64_t    netSendBytes;   // 网络发送字节/秒（暂未实现）
     bool        cpuLimited;     // 是否已应用 CPU 限制
     bool        gpuLimited;     // 是否已应用 GPU 限制
+    bool        memLimited;     // 是否已应用内存限制
+    bool        ioLimited;      // 是否已应用 IO 优先级限制
     uint32_t    cpuLimitPct;    // CPU 限制百分比
     uint32_t    gpuLimitPct;    // GPU 限制百分比
+    uint64_t    memLimitBytes;  // 内存限制（字节，0 = 未限制）
     std::string iconBase64;     // exe 图标 Base64 PNG（可空）
 };
 
 struct LimitRequest {
     uint32_t pid;
-    int      cpuPercent; // -1 表示不限制
-    int      gpuPercent; // -1 表示不限制
+    int      cpuPercent;    // -1 表示不限制
+    int      gpuPercent;    // -1 表示不限制
+    int64_t  memLimitMB;    // -1 表示不限制，0 表示移除，>0 表示限制 MB
+    bool     ioLowPriority; // true = 低 IO 优先级，false = 正常
+    bool     hasIo;         // 是否携带 IO 设置
 };
 
 enum class WindowAction {
