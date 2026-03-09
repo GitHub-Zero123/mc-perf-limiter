@@ -195,8 +195,8 @@ def generateCode():
     if not os.path.exists(outDir):
         os.makedirs(outDir)
     target = EmbedResGenerator(
-        os.path.join(GET_CURRENT_PATH(), "dist"), 
-        os.path.join(outDir, "Resource/Resource.hpp"),
+        os.path.join(GET_CURRENT_PATH(), "dist"),
+        os.path.join(outDir, "Resource.hpp"),
         namespace="MCPerfLimiter::Resource",
     )
     target.generate()

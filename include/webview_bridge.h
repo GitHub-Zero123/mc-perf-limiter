@@ -65,4 +65,9 @@ private:
     // Debug：注册 NavigationCompleted 监听，失败时 fallback 到虚拟主机
     void setupDebugFallback();
 #endif
+
+#if !defined(_DEBUG)
+    // Release + 内联资源：注册 WebResourceRequested，从内存 resourceMap 提供所有文件
+    void setupInlineResources();
+#endif
 };

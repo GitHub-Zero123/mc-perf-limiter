@@ -10,6 +10,7 @@
 #include <WebView2.h>
 #include <WebView2EnvironmentOptions.h>
 #include <shlobj.h>
+#include <shlwapi.h>   // SHCreateMemStream（Release 内联资源用）
 #include <stdexcept>
 #include <string>
 #include <algorithm>
@@ -202,19 +203,10 @@ bool WebViewBridge::init(HWND hwnd, const std::wstring& uiDir,
                             setupDebugFallback();
                             webview_->Navigate(L"http://localhost:5173");
 #elif defined(MC_USE_INLINE_RESOURCES)
-                            // Release + 内联资源：虚拟主机映射到内存
-                            {
-                                auto it = MCPerfLimiter::Resource::resourceMap
-                                              .find("index.html");
-                                if (it != MCPerfLimiter::Resource::resourceMap.end()) {
-                                    const auto* ptr = it->second.first;
-                                    size_t       sz  = it->second.second;
-                                    std::string  html(
-                                        reinterpret_cast<const char*>(ptr), sz);
-                                    std::wstring whtml = utf8_to_wide(html);
-                                    webview_->NavigateToString(whtml.c_str());
-                                }
-                            }
+                            // Release + 内联资源：WebResourceRequested 拦截 + 内存流
+                            // 从 resourceMap 提供所有文件，支持 index.html + assets/* 子资源
+                            setupInlineResources();
+                            webview_->Navigate(L"https://mc-perf-limiter.local/index.html");
 #else
                             // Release 无内联资源：虚拟主机映射 dist 文件夹
                             {
@@ -354,3 +346,102 @@ void WebViewBridge::setupDebugFallback() {
     );
 }
 #endif
+
+// ─── Release 内联资源加载 ─────────────────────────────────────────────────────
+// 注册 AddWebResourceRequestedFilter + add_WebResourceRequested
+// 从内存 resourceMap 提供所有文件（index.html + assets/*）
+// 必须在 Navigate 之前调用
+
+#if !defined(_DEBUG)
+void WebViewBridge::setupInlineResources() {
+#ifdef MC_USE_INLINE_RESOURCES
+    // 拦截 https://mc-perf-limiter.local/* 的所有请求
+    webview_->AddWebResourceRequestedFilter(
+        L"https://mc-perf-limiter.local/*",
+        COREWEBVIEW2_WEB_RESOURCE_CONTEXT_ALL);
+
+    webview_->add_WebResourceRequested(
+        Callback<ICoreWebView2WebResourceRequestedEventHandler>(
+            [this](ICoreWebView2* /*sender*/,
+                   ICoreWebView2WebResourceRequestedEventArgs* args) -> HRESULT
+            {
+                // 取出请求 URI
+                ComPtr<ICoreWebView2WebResourceRequest> req;
+                args->get_Request(&req);
+                LPWSTR uriRaw = nullptr;
+                req->get_Uri(&uriRaw);
+                if (!uriRaw) return S_OK;
+                std::wstring uri(uriRaw);
+                CoTaskMemFree(uriRaw);
+
+                // 解析路径：https://mc-perf-limiter.local/assets/index.js → assets/index.js
+                const std::wstring prefix = L"https://mc-perf-limiter.local/";
+                if (uri.find(prefix) != 0) return S_OK;
+
+                std::wstring relW = uri.substr(prefix.size());
+                // 去查询字符串和 hash
+                auto q = relW.find(L'?');
+                if (q != std::wstring::npos) relW = relW.substr(0, q);
+                auto h = relW.find(L'#');
+                if (h != std::wstring::npos) relW = relW.substr(0, h);
+
+                // wstring → UTF-8
+                std::string key;
+                if (!relW.empty()) {
+                    int n = WideCharToMultiByte(CP_UTF8, 0,
+                        relW.c_str(), static_cast<int>(relW.size()),
+                        nullptr, 0, nullptr, nullptr);
+                    if (n > 0) {
+                        key.resize(n);
+                        WideCharToMultiByte(CP_UTF8, 0,
+                            relW.c_str(), static_cast<int>(relW.size()),
+                            &key[0], n, nullptr, nullptr);
+                    }
+                }
+                if (key.empty()) key = "index.html";
+
+                // 在 resourceMap 中查找
+                auto it = MCPerfLimiter::Resource::resourceMap.find(key);
+                if (it == MCPerfLimiter::Resource::resourceMap.end())
+                    return S_OK;  // 找不到 → WebView2 显示默认 404
+
+                const auto* ptr = it->second.first;
+                size_t       sz  = it->second.second;
+
+                // 推断 Content-Type（按扩展名）
+                auto endsWith = [&key](const char* suf) {
+                    size_t sl = strlen(suf);
+                    return key.size() >= sl &&
+                           key.compare(key.size() - sl, sl, suf) == 0;
+                };
+                std::wstring ct = L"application/octet-stream";
+                if      (endsWith(".html")) ct = L"text/html; charset=utf-8";
+                else if (endsWith(".js"))   ct = L"text/javascript; charset=utf-8";
+                else if (endsWith(".css"))  ct = L"text/css; charset=utf-8";
+                else if (endsWith(".png"))  ct = L"image/png";
+                else if (endsWith(".svg"))  ct = L"image/svg+xml";
+                else if (endsWith(".ico"))  ct = L"image/x-icon";
+                else if (endsWith(".woff2"))ct = L"font/woff2";
+                else if (endsWith(".woff")) ct = L"font/woff";
+
+                // 创建内存流
+                IStream* rawStream = SHCreateMemStream(ptr, static_cast<UINT>(sz));
+                if (!rawStream) return S_OK;
+                ComPtr<IStream> stream;
+                stream.Attach(rawStream);
+
+                // 构造 HTTP 响应
+                ComPtr<ICoreWebView2WebResourceResponse> resp;
+                env_->CreateWebResourceResponse(
+                    stream.Get(), 200, L"OK",
+                    (L"Content-Type: " + ct).c_str(),
+                    &resp);
+                if (resp) args->put_Response(resp.Get());
+                return S_OK;
+            }
+        ).Get(),
+        nullptr
+    );
+#endif  // MC_USE_INLINE_RESOURCES
+}
+#endif  // !_DEBUG
