@@ -421,7 +421,7 @@ function renderDetailPanel(proc) {
           ${!gpuHookAvailable
         ? `<div class="limit-hint">⚠ 未找到 gpu_hook.dll，GPU 帧率限制不可用${dllSearchPath ? `<br><small style="opacity:.6">查找路径: ${escHtml(dllSearchPath)}</small>` : ''}</div>`
         : proc.gpuLimited
-            ? `<div class="limit-hint">限制游戏帧率上限，模拟低端移动 GPU 性能</div>`
+            ? `<div class="limit-hint">模拟低端移动 GPU 算力：设置值越低，GPU 渲染时间占比越少，着色器表现越接近低端移动端</div>`
             : ''}
 
           <!-- 内存限制行 -->
