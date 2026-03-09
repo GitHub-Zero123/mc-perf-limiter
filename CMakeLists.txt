@@ -27,6 +27,9 @@ target_link_libraries(webview2 INTERFACE
 # nativefiledialog-extended
 add_subdirectory("${THIRD_PARTY_DIR}/nfd" EXCLUDE_FROM_ALL)
 
+# GPU Hook DLL（帧率限制注入库）
+add_subdirectory("${CMAKE_SOURCE_DIR}/gpu_hook")
+
 file(GLOB_RECURSE MC_PERF_LIMITER_SOURCES "src/*.cpp")
 
 add_executable(MCPerfLimiter WIN32 ${MC_PERF_LIMITER_SOURCES})

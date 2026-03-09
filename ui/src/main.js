@@ -9,6 +9,9 @@ import { themeManager } from './theme';
 let processList = [];
 let selectedPid = null;
 let isMaximized = false;
+let systemTotalMemMB = 8192; // 默认 8GB，收到 systemInfo 后更新
+let gpuHookAvailable = false; // gpu_hook.dll 是否存在
+let dllSearchPath = ''; // 调试：实际查找 gpu_hook.dll 的路径
 // ─── DOM 引用 ─────────────────────────────────────────────────────────────────
 const elProcessList = document.getElementById('process-list');
 const elMainContent = document.getElementById('main-content');
@@ -383,24 +386,43 @@ function renderDetailPanel(proc) {
               <span class="limit-value" id="label-cpu">${proc.cpuLimited ? proc.cpuLimitPct : 50}%</span>
             </div>
           </div>
+          ${proc.cpuLimited ? `<div class="limit-hint">通过限制可用 CPU 核心数生效，任务管理器显示值会有少数浮动</div>` : ''}
 
           <!-- GPU 限制行 -->
           <div class="limit-row2">
             <div class="limit-row2-left">
-              <label class="toggle" title="启用/禁用 GPU 限制">
-                <input type="checkbox" id="toggle-gpu" ${proc.gpuLimited ? 'checked' : ''}>
+              <label class="toggle" title="${gpuHookAvailable ? '启用/禁用 GPU 限制' : '需要 gpu_hook.dll 才能使用 GPU 限制'}">
+                <input type="checkbox" id="toggle-gpu"
+                  ${proc.gpuLimited ? 'checked' : ''}
+                  ${!gpuHookAvailable ? 'disabled' : ''}>
                 <span class="toggle-track"></span>
                 <span class="toggle-thumb"></span>
               </label>
               <span class="limit-row2-name">GPU</span>
+              <button class="info-btn" id="btn-gpu-info" title="GPU 限制说明" aria-label="GPU 限制说明">
+                <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+                  <circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="1.5"/>
+                  <path d="M8 7v5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                  <circle cx="8" cy="4.5" r="0.75" fill="currentColor"/>
+                </svg>
+              </button>
+              <div class="info-popup" id="popup-gpu-info" hidden>
+                基于 DLL 注入方案实现，通过 Hook wglSwapBuffers 控制帧率上限。<br>
+                <strong>请确保游戏已正常进入局内再启用</strong>，以避免触发启动阶段的完整性检测。
+              </div>
             </div>
             <div class="limit-slider-wrap">
               <input type="range" id="slider-gpu" min="1" max="99"
                 value="${proc.gpuLimited ? proc.gpuLimitPct : 80}"
-                ${proc.gpuLimited ? '' : 'disabled'} />
+                ${(proc.gpuLimited && gpuHookAvailable) ? '' : 'disabled'} />
               <span class="limit-value" id="label-gpu">${proc.gpuLimited ? proc.gpuLimitPct : 80}%</span>
             </div>
           </div>
+          ${!gpuHookAvailable
+        ? `<div class="limit-hint">⚠ 未找到 gpu_hook.dll，GPU 帧率限制不可用${dllSearchPath ? `<br><small style="opacity:.6">查找路径: ${escHtml(dllSearchPath)}</small>` : ''}</div>`
+        : proc.gpuLimited
+            ? `<div class="limit-hint">限制游戏帧率上限，模拟低端移动 GPU 性能</div>`
+            : ''}
 
           <!-- 内存限制行 -->
           <div class="limit-row2">
@@ -413,10 +435,12 @@ function renderDetailPanel(proc) {
               <span class="limit-row2-name">内存</span>
             </div>
             <div class="limit-slider-wrap">
-              <input type="range" id="slider-mem" min="256" max="8192" step="256"
-                value="${proc.memLimited ? Math.round((proc.memLimitBytes || 0) / 1024 / 1024) : 2048}"
+              <input type="range" id="slider-mem" min="256"
+                max="${Math.max(systemTotalMemMB, 1024)}"
+                step="256"
+                value="${proc.memLimited ? Math.round((proc.memLimitBytes || 0) / 1024 / 1024) : Math.round(systemTotalMemMB / 2 / 256) * 256}"
                 ${proc.memLimited ? '' : 'disabled'} />
-              <span class="limit-value" id="label-mem">${proc.memLimited ? Math.round((proc.memLimitBytes || 0) / 1024 / 1024) : 2048} MB</span>
+              <span class="limit-value" id="label-mem">${proc.memLimited ? Math.round((proc.memLimitBytes || 0) / 1024 / 1024) : Math.round(systemTotalMemMB / 2 / 256) * 256} MB</span>
             </div>
           </div>
 
@@ -446,6 +470,30 @@ function bindDetailEvents(pid) {
     const toggleGpu = document.getElementById('toggle-gpu');
     const sliderGpu = document.getElementById('slider-gpu');
     const labelGpu = document.getElementById('label-gpu');
+    // ── GPU 感叹号提示按钮 ────────────────────────────────────────────────────
+    const btnGpuInfo = document.getElementById('btn-gpu-info');
+    const popupGpuInfo = document.getElementById('popup-gpu-info');
+    if (btnGpuInfo && popupGpuInfo) {
+        // 初始隐藏
+        popupGpuInfo.style.display = 'none';
+        btnGpuInfo.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const showing = popupGpuInfo.style.display !== 'none';
+            if (showing) {
+                popupGpuInfo.style.display = 'none';
+            }
+            else {
+                popupGpuInfo.style.display = 'block';
+                // 下一次点击其他区域时关闭
+                const onOutside = (ev) => {
+                    if (!popupGpuInfo.contains(ev.target) && ev.target !== btnGpuInfo) {
+                        popupGpuInfo.style.display = 'none';
+                    }
+                };
+                document.addEventListener('click', onOutside, { capture: true, once: true });
+            }
+        });
+    }
     const toggleMem = document.getElementById('toggle-mem');
     const sliderMem = document.getElementById('slider-mem');
     const labelMem = document.getElementById('label-mem');
@@ -544,6 +592,22 @@ function updateDetailUsage(proc) {
     if (valIoW)
         valIoW.textContent = formatSpeed(proc.ioWriteBytes || 0);
 }
+// ─── 事件：系统信息（总内存 + GPU hook 可用性）───────────────────────────────
+bridge.on('systemInfo', ({ totalMemoryMB, gpuHookAvailable: hookAvail, dllSearchPath: dllPath }) => {
+    systemTotalMemMB = totalMemoryMB;
+    gpuHookAvailable = hookAvail;
+    dllSearchPath = dllPath ?? '';
+    // 调试：输出 dll 查找情况
+    console.log('[systemInfo] totalMemoryMB:', totalMemoryMB);
+    console.log('[systemInfo] gpuHookAvailable:', hookAvail);
+    console.log('[systemInfo] dllSearchPath:', dllSearchPath);
+    // 如果已选中进程，重新渲染详情面板（更新 GPU 行的可用状态）
+    if (selectedPid !== null) {
+        const proc = processList.find(p => p.pid === selectedPid);
+        if (proc)
+            renderDetailPanel(proc);
+    }
+});
 // ─── 事件：限制结果 ───────────────────────────────────────────────────────────
 bridge.on('limitApplied', (data) => {
     if (!data.cpu_ok || !data.gpu_ok)

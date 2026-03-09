@@ -46,8 +46,9 @@ private:
     Microsoft::WRL::ComPtr<ICoreWebView2>             webview_;
 
     MessageHandler msgHandler_;
-    bool           ready_  = false;
-    HWND           hwnd_   = nullptr;
+    bool           ready_       = false;
+    bool           readyFired_  = false;  // NavigationCompleted 后 onReady 只触发一次
+    HWND           hwnd_        = nullptr;
     std::wstring   uiDir_;   // ui/dist 目录（虚拟主机映射用）
 
     // 待应用的窗口尺寸（WebView2 就绪前 resize() 会缓存在此）

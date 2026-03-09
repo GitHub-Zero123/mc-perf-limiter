@@ -11,6 +11,7 @@
 #include <string>
 #include <stdexcept>
 #include <mutex>
+#include <thread>
 #include <vector>
 
 using json = nlohmann::json;
@@ -105,13 +106,31 @@ int App::run(HINSTANCE hInstance, int nCmdShow) {
             sendEvent(ipc::EVT_THEME_CHANGED,
                 { {"theme", ipc::theme_to_str(t)} });
 
-            // 推送系统信息（总物理内存，单位 MB）
+            // 推送系统信息（总物理内存 + GPU hook 可用性）
             MEMORYSTATUSEX ms{};
             ms.dwLength = sizeof(ms);
             if (GlobalMemoryStatusEx(&ms)) {
                 uint64_t totalMB = ms.ullTotalPhys / (1024ULL * 1024ULL);
-                sendEvent(ipc::EVT_SYSTEM_INFO,
-                    { {"totalMemoryMB", totalMB} });
+                bool gpuHookAvail = GpuLimiter::isHookAvailable();
+
+                // 将搜索路径转为 UTF-8 便于前端显示（调试用）
+                std::wstring dllPathW = GpuLimiter::getDllSearchPath();
+                std::string  dllPathU8;
+                if (!dllPathW.empty()) {
+                    int sz = WideCharToMultiByte(CP_UTF8, 0,
+                        dllPathW.c_str(), -1, nullptr, 0, nullptr, nullptr);
+                    if (sz > 0) {
+                        dllPathU8.resize(sz - 1);
+                        WideCharToMultiByte(CP_UTF8, 0,
+                            dllPathW.c_str(), -1, &dllPathU8[0], sz, nullptr, nullptr);
+                    }
+                }
+
+                sendEvent(ipc::EVT_SYSTEM_INFO, {
+                    {"totalMemoryMB",    totalMB},
+                    {"gpuHookAvailable", gpuHookAvail},
+                    {"dllSearchPath",    dllPathU8}   // 调试：实际查找的路径
+                });
             }
 
             // 启动进程扫描器（每 1000ms 更新一次）
@@ -187,17 +206,13 @@ void App::handleSetLimit(const json& payload) {
 
     if (pid == 0) { sendError("Invalid PID"); return; }
 
-    bool cpuOk = true, gpuOk = true, memOk = true, ioOk = true;
+    bool cpuOk = true, memOk = true, ioOk = true;
 
+    // CPU / 内存 / IO 限制同步执行（不阻塞）
     if (cpuPercent >= 1 && cpuPercent <= 99)
         cpuOk = cpuLimiter_->applyLimit(pid, static_cast<uint32_t>(cpuPercent));
     else if (cpuPercent == 0)
         cpuLimiter_->removeLimit(pid);
-
-    if (gpuPercent >= 1 && gpuPercent <= 99)
-        gpuOk = gpuLimiter_->applyLimit(pid, static_cast<uint32_t>(gpuPercent));
-    else if (gpuPercent == 0)
-        gpuLimiter_->removeLimit(pid);
 
     if (memMB > 0) {
         uint64_t bytes = static_cast<uint64_t>(memMB) * 1024 * 1024;
@@ -213,10 +228,35 @@ void App::handleSetLimit(const json& payload) {
             ioLimiter_->removeLimit(pid);
     }
 
+    // GPU 限制包含注入 + Sleep + 管道重试，必须在后台线程执行，避免卡死 UI
+    if (gpuPercent >= 1 && gpuPercent <= 99) {
+        auto* gpu = gpuLimiter_.get();
+        uint32_t gpuPct = static_cast<uint32_t>(gpuPercent);
+        std::thread([this, gpu, pid, gpuPct, cpuOk, memOk, ioOk,
+                     cpuPercent, gpuPercent, memMB, ioLimit]() {
+            bool gpuOk = gpu->applyLimit(pid, gpuPct);
+            sendEvent(ipc::EVT_LIMIT_APPLIED, {
+                {"pid",      pid},
+                {"cpu_ok",   cpuOk},
+                {"gpu_ok",   gpuOk},
+                {"mem_ok",   memOk},
+                {"io_ok",    ioOk},
+                {"cpu_pct",  cpuPercent},
+                {"gpu_pct",  gpuPercent},
+                {"mem_mb",   memMB},
+                {"io_limit", ioLimit}
+            });
+        }).detach();
+        return;  // 异步完成，提前返回
+    } else if (gpuPercent == 0) {
+        gpuLimiter_->removeLimit(pid);
+    }
+
+    // 无 GPU 操作时同步发送结果
     sendEvent(ipc::EVT_LIMIT_APPLIED, {
         {"pid",      pid},
         {"cpu_ok",   cpuOk},
-        {"gpu_ok",   gpuOk},
+        {"gpu_ok",   true},
         {"mem_ok",   memOk},
         {"io_ok",    ioOk},
         {"cpu_pct",  cpuPercent},

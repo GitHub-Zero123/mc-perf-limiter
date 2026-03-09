@@ -13,6 +13,7 @@
 #include <stdexcept>
 #include <string>
 #include <algorithm>
+#include <memory>
 
 // Release 模式：引入由 ui/generate.py 生成的内联资源
 // 生成命令：python ui/generate.py  （CMake PRE_BUILD 自动调用）
@@ -172,6 +173,27 @@ bool WebViewBridge::init(HWND hwnd, const std::wstring& uiDir,
                                 nullptr
                             );
 
+                            // ── 注册 NavigationCompleted：页面 JS 加载完毕后调用 onReady ──
+                            // 必须在此时调用 onReady，确保 bridge.on() 已注册后再 postMessage
+                            // readyFired_ 为成员变量，通过 this 访问，只触发一次
+                            webview_->add_NavigationCompleted(
+                                Callback<ICoreWebView2NavigationCompletedEventHandler>(
+                                    [this, onReady](ICoreWebView2* /*sender*/,
+                                        ICoreWebView2NavigationCompletedEventArgs* args) -> HRESULT
+                                    {
+                                        BOOL success = FALSE;
+                                        args->get_IsSuccess(&success);
+                                        if (success && onReady && !this->readyFired_) {
+                                            this->readyFired_ = true;
+                                            this->applyBounds(this->pendingW_, this->pendingH_);
+                                            onReady();
+                                        }
+                                        return S_OK;
+                                    }
+                                ).Get(),
+                                nullptr
+                            );
+
                             // ── 加载前端页面 ─────────────────────────────
 #ifdef _DEBUG
                             // Debug：优先连接 Vite dev server（热更新）
@@ -181,8 +203,6 @@ bool WebViewBridge::init(HWND hwnd, const std::wstring& uiDir,
                             webview_->Navigate(L"http://localhost:5173");
 #elif defined(MC_USE_INLINE_RESOURCES)
                             // Release + 内联资源：虚拟主机映射到内存
-                            // 此处仍使用 SetVirtualHostNameToFolderMapping 作为 base URL
-                            // 实际 index.html 内容通过 NavigateToString 注入
                             {
                                 auto it = MCPerfLimiter::Resource::resourceMap
                                               .find("index.html");
@@ -219,7 +239,7 @@ bool WebViewBridge::init(HWND hwnd, const std::wstring& uiDir,
                             ready_ = true;
                             // ready 后用最新缓存尺寸刷新一次（修复最大化/快速 resize 丢失问题）
                             applyBounds(pendingW_, pendingH_);
-                            if (onReady) onReady();
+                            // 注意：onReady() 现在由 NavigationCompleted 回调触发，不在此处调用
                             return S_OK;
                         }
                     ).Get()

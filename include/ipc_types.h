@@ -25,7 +25,7 @@ inline constexpr const char* EVT_LIMIT_REMOVED    = "limitRemoved";
 inline constexpr const char* EVT_STATS_UPDATE     = "statsUpdate";
 inline constexpr const char* EVT_THEME_CHANGED    = "themeChanged";
 inline constexpr const char* EVT_WINDOW_STATE     = "windowState";
-inline constexpr const char* EVT_SYSTEM_INFO      = "systemInfo";
+inline constexpr const char* EVT_SYSTEM_INFO      = "systemInfo";   // { totalMemoryMB, gpuHookAvailable }
 inline constexpr const char* EVT_ERROR            = "error";
 
 // ─── 数据结构 ───────────────────────────────────────────────

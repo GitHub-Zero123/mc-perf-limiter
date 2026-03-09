@@ -626,9 +626,10 @@ button, input, select {
 .limit-row2-left {
   display: flex;
   align-items: center;
-  gap: 8px;
-  width: 64px;
+  gap: 6px;
+  width: 80px;
   flex-shrink: 0;
+  position: relative;
 }
 
 .limit-row2-name {
@@ -637,6 +638,53 @@ button, input, select {
   color: var(--text-secondary);
   letter-spacing: 0.3px;
   min-width: 28px;
+}
+
+/* GPU 感叹号信息按钮 */
+.info-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-muted, var(--text-secondary));
+  opacity: 0.6;
+  border-radius: 50%;
+  transition: opacity 0.15s, color 0.15s;
+  flex-shrink: 0;
+}
+.info-btn:hover {
+  opacity: 1;
+  color: var(--accent-warning, #e6a817);
+}
+
+/* 弹出说明气泡 */
+.info-popup {
+  position: absolute;
+  left: 0;
+  top: calc(100% + 6px);
+  z-index: 200;
+  /* 强制不透明背景，避免叠加透视 */
+  background-color: #1e2128;
+  color: #e0e0e0;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 11px;
+  line-height: 1.5;
+  width: 240px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+  pointer-events: auto;
+  display: none;
+}
+[data-theme="light"] .info-popup {
+  background-color: #f5f5f5;
+  color: #222;
+  border-color: rgba(0,0,0,0.12);
 }
 
 /* 旧式（兼容保留） */
