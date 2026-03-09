@@ -6,15 +6,16 @@
 // ─── 消息类型定义（与 ipc_types.h 保持一致）─────────────────────────────────
 
 export interface ProcessInfo {
-  pid:        number
-  name:       string
-  exePath:    string
-  cpuUsage:   number
-  gpuUsage:   number
-  cpuLimited: boolean
-  gpuLimited: boolean
+  pid:         number
+  name:        string
+  exePath:     string
+  cpuUsage:    number
+  gpuUsage:    number
+  cpuLimited:  boolean
+  gpuLimited:  boolean
   cpuLimitPct: number
   gpuLimitPct: number
+  iconBase64?: string   // exe 图标 Base64 PNG（可选）
 }
 
 export type Theme = 'dark' | 'light' | 'system'

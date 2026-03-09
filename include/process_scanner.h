@@ -63,5 +63,11 @@ private:
     // 获取进程完整路径
     static std::string getProcessPath(HANDLE hProcess);
 
+    // 提取 exe 图标为 Base64 PNG 字符串（空表示失败）
+    static std::string extractIcon(const std::string& exePath);
+
+    // 图标缓存（pid → base64 PNG）
+    std::unordered_map<uint32_t, std::string> iconCache_;
+
     void workerLoop();
 };

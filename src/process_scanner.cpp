@@ -4,18 +4,33 @@
 #ifndef NOMINMAX
 #  define NOMINMAX
 #endif
-#include "process_scanner.h"
+// GDI+ 需要在 windows.h 之后、且不能有 WIN32_LEAN_AND_MEAN 省掉 objidl.h
+// 所以先包含完整 windows 再 undef 限制
 #include <windows.h>
+#include <objidl.h>
+// 关闭 GDI+ 最低版本要求，允许使用完整 API
+#ifndef GDIPVER
+#  define GDIPVER 0x0110
+#endif
+#include <gdiplus.h>
 #include <tlhelp32.h>
 #include <psapi.h>
 #include <pdh.h>
+#include <shellapi.h>
+#include <shlobj.h>
+#include "process_scanner.h"
 #include <string>
 #include <algorithm>
 #include <chrono>
 #include <thread>
+#include <vector>
 
 #pragma comment(lib, "pdh.lib")
 #pragma comment(lib, "psapi.lib")
+#pragma comment(lib, "gdiplus.lib")
+#pragma comment(lib, "shell32.lib")
+
+using namespace Gdiplus;
 
 // ─── PDH 状态（GPU 查询）────────────────────────────────────────────────────
 
@@ -59,6 +74,128 @@ static std::string wide_to_utf8(const std::wstring& w) {
                         w.c_str(), static_cast<int>(w.size()),
                         &s[0], n, nullptr, nullptr);
     return s;
+}
+
+// ─── GDI+ 辅助：提取 exe 图标为 Base64 PNG ───────────────────────────────────
+
+static ULONG_PTR s_gdiplusToken = 0;
+
+static void ensureGdiplus() {
+    if (s_gdiplusToken) return;
+    Gdiplus::GdiplusStartupInput si;
+    Gdiplus::GdiplusStartup(&s_gdiplusToken, &si, nullptr);
+}
+
+// 获取 IStream CLSID for PNG
+static bool getPngClsid(CLSID& clsid) {
+    UINT num = 0, size = 0;
+    Gdiplus::GetImageEncodersSize(&num, &size);
+    if (!size) return false;
+    auto* buf = reinterpret_cast<Gdiplus::ImageCodecInfo*>(new BYTE[size]);
+    Gdiplus::GetImageEncoders(num, size, buf);
+    bool found = false;
+    for (UINT i = 0; i < num; ++i) {
+        if (wcscmp(buf[i].MimeType, L"image/png") == 0) {
+            clsid = buf[i].Clsid;
+            found = true;
+            break;
+        }
+    }
+    delete[] reinterpret_cast<BYTE*>(buf);
+    return found;
+}
+
+// Base64 编码
+static std::string base64Encode(const std::vector<BYTE>& data) {
+    static const char tbl[] =
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    std::string out;
+    out.reserve(((data.size() + 2) / 3) * 4);
+    for (size_t i = 0; i < data.size(); i += 3) {
+        BYTE b0 = data[i];
+        BYTE b1 = (i + 1 < data.size()) ? data[i + 1] : 0;
+        BYTE b2 = (i + 2 < data.size()) ? data[i + 2] : 0;
+        out += tbl[b0 >> 2];
+        out += tbl[((b0 & 3) << 4) | (b1 >> 4)];
+        out += (i + 1 < data.size()) ? tbl[((b1 & 15) << 2) | (b2 >> 6)] : '=';
+        out += (i + 2 < data.size()) ? tbl[b2 & 63] : '=';
+    }
+    return out;
+}
+
+// 从 HICON 生成 16×16 PNG Base64 字符串
+static std::string iconToBase64Png(HICON hIcon) {
+    ensureGdiplus();
+
+    // 创建 16×16 内存 DC
+    HDC hdc = GetDC(nullptr);
+    HDC memDC = CreateCompatibleDC(hdc);
+
+    BITMAPINFO bmi{};
+    bmi.bmiHeader.biSize        = sizeof(BITMAPINFOHEADER);
+    bmi.bmiHeader.biWidth       = 16;
+    bmi.bmiHeader.biHeight      = -16; // top-down
+    bmi.bmiHeader.biPlanes      = 1;
+    bmi.bmiHeader.biBitCount    = 32;
+    bmi.bmiHeader.biCompression = BI_RGB;
+
+    void* bits = nullptr;
+    HBITMAP hBmp = CreateDIBSection(memDC, &bmi, DIB_RGB_COLORS, &bits, nullptr, 0);
+    HBITMAP hOld = static_cast<HBITMAP>(SelectObject(memDC, hBmp));
+
+    // 填充透明背景
+    RECT r{ 0, 0, 16, 16 };
+    FillRect(memDC, &r, static_cast<HBRUSH>(GetStockObject(BLACK_BRUSH)));
+
+    DrawIconEx(memDC, 0, 0, hIcon, 16, 16, 0, nullptr, DI_NORMAL);
+    SelectObject(memDC, hOld);
+
+    // GDI+ bitmap → IStream → PNG bytes
+    Gdiplus::Bitmap bmp(hBmp, nullptr);
+    CLSID pngClsid;
+    std::string result;
+    if (getPngClsid(pngClsid)) {
+        IStream* stream = nullptr;
+        if (SUCCEEDED(CreateStreamOnHGlobal(nullptr, TRUE, &stream))) {
+            if (bmp.Save(stream, &pngClsid) == Gdiplus::Ok) {
+                LARGE_INTEGER li{}; ULARGE_INTEGER uli{};
+                stream->Seek(li, STREAM_SEEK_END, &uli);
+                DWORD sz = static_cast<DWORD>(uli.QuadPart);
+                std::vector<BYTE> buf(sz);
+                stream->Seek(li, STREAM_SEEK_SET, nullptr);
+                ULONG read = 0;
+                stream->Read(buf.data(), sz, &read);
+                result = "data:image/png;base64," + base64Encode(buf);
+            }
+            stream->Release();
+        }
+    }
+
+    DeleteObject(hBmp);
+    DeleteDC(memDC);
+    ReleaseDC(nullptr, hdc);
+    return result;
+}
+
+// 从 exe 路径提取图标
+std::string ProcessScanner::extractIcon(const std::string& exePath) {
+    if (exePath.empty()) return {};
+    // UTF-8 → wide
+    int n = MultiByteToWideChar(CP_UTF8, 0, exePath.c_str(),
+                                 static_cast<int>(exePath.size()), nullptr, 0);
+    std::wstring wpath(n, L'\0');
+    MultiByteToWideChar(CP_UTF8, 0, exePath.c_str(),
+                         static_cast<int>(exePath.size()), &wpath[0], n);
+
+    SHFILEINFOW sfi{};
+    UINT flags = SHGFI_ICON | SHGFI_SMALLICON | SHGFI_USEFILEATTRIBUTES;
+    DWORD_PTR ok = SHGetFileInfoW(wpath.c_str(), FILE_ATTRIBUTE_NORMAL,
+                                   &sfi, sizeof(sfi), flags);
+    if (!ok || !sfi.hIcon) return {};
+
+    std::string b64 = iconToBase64Png(sfi.hIcon);
+    DestroyIcon(sfi.hIcon);
+    return b64;
 }
 
 // ─── 构造/析构 ────────────────────────────────────────────────────────────────
@@ -235,6 +372,13 @@ std::vector<ipc::ProcessInfo> ProcessScanner::scanOnce() {
         info.exePath  = getProcessPath(hProc);
         info.cpuUsage = measureCpuUsage(pid, hProc);
         info.gpuUsage = measureGpuUsage(pid);
+
+        // 图标：首次出现时提取并缓存，避免每次扫描重复解码
+        auto iconIt = iconCache_.find(pid);
+        if (iconIt == iconCache_.end()) {
+            iconCache_[pid] = extractIcon(info.exePath);
+        }
+        info.iconBase64 = iconCache_[pid];
         // 限制状态由 App 层填充（持有 Limiter 对象）
 
         result.push_back(std::move(info));
@@ -244,7 +388,7 @@ std::vector<ipc::ProcessInfo> ProcessScanner::scanOnce() {
 
     CloseHandle(hSnap);
 
-    // 清理已消失进程的历史 CPU 样本
+    // 清理已消失进程的历史 CPU 样本 & 图标缓存
     std::vector<uint32_t> foundPids;
     for (auto& p : result) foundPids.push_back(p.pid);
     for (auto it = cpuPrev_.begin(); it != cpuPrev_.end(); ) {
@@ -252,6 +396,12 @@ std::vector<ipc::ProcessInfo> ProcessScanner::scanOnce() {
         for (auto pid : foundPids)
             if (pid == it->first) { found = true; break; }
         it = found ? std::next(it) : cpuPrev_.erase(it);
+    }
+    for (auto it = iconCache_.begin(); it != iconCache_.end(); ) {
+        bool found = false;
+        for (auto pid : foundPids)
+            if (pid == it->first) { found = true; break; }
+        it = found ? std::next(it) : iconCache_.erase(it);
     }
 
     return result;

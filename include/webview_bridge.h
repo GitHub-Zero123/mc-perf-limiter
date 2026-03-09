@@ -43,9 +43,22 @@ private:
     Microsoft::WRL::ComPtr<ICoreWebView2>             webview_;
 
     MessageHandler msgHandler_;
-    bool           ready_ = false;
-    HWND           hwnd_  = nullptr;
+    bool           ready_  = false;
+    HWND           hwnd_   = nullptr;
+    std::wstring   uiDir_;   // ui/dist 目录（虚拟主机映射用）
 
-    // 注册 host object 和消息监听
+    // 待应用的窗口尺寸（WebView2 就绪前 resize() 会缓存在此）
+    int            pendingW_ = 0;
+    int            pendingH_ = 0;
+
+    // 注册消息监听
     void setupMessageChannel();
+
+    // 实际设置 WebView2 Bounds（含最大化判断）
+    void applyBounds(int width, int height);
+
+#ifdef _DEBUG
+    // Debug：注册 NavigationCompleted 监听，失败时 fallback 到虚拟主机
+    void setupDebugFallback();
+#endif
 };

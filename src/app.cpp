@@ -99,7 +99,7 @@ int App::run(HINSTANCE hInstance, int nCmdShow) {
             scanner_->start(
                 [this](const std::vector<ipc::ProcessInfo>& list) {
                     onProcessListUpdate(list);
-                }, 1000);
+                }, 800);
         });
 
     // ── 窗口大小变化时 resize WebView ─────────────────────────
@@ -237,7 +237,8 @@ void App::onProcessListUpdate(const std::vector<ipc::ProcessInfo>& list) {
             {"cpuLimited", cpuLimiter_->hasLimit(p.pid)},
             {"gpuLimited", gpuLimiter_->hasLimit(p.pid)},
             {"cpuLimitPct",cpuLimiter_->getLimit(p.pid)},
-            {"gpuLimitPct",gpuLimiter_->getLimit(p.pid)}
+            {"gpuLimitPct",gpuLimiter_->getLimit(p.pid)},
+            {"iconBase64", p.iconBase64}
         });
     }
     sendEvent(ipc::EVT_PROCESS_LIST, arr);

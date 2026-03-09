@@ -40,7 +40,9 @@ bool Window::registerClass(HINSTANCE hInstance) {
     wc.lpfnWndProc   = WndProc;
     wc.hInstance     = hInstance;
     wc.hCursor       = LoadCursor(nullptr, IDC_ARROW);
-    wc.hbrBackground = nullptr;  // 背景由 WebView2 / DWM 负责
+    // WebView2 缩进6px留resize热区，边缝用深色背景填充（与UI #1a1a1d对齐）
+    // RGB(26, 26, 29) ≈ #1a1a1d
+    wc.hbrBackground = CreateSolidBrush(RGB(26, 26, 29));
     wc.lpszClassName = WC_NAME;
     wc.hIcon         = LoadIcon(hInstance, MAKEINTRESOURCE(1));
     wc.hIconSm       = wc.hIcon;
@@ -54,10 +56,8 @@ bool Window::registerClass(HINSTANCE hInstance) {
 bool Window::create(HINSTANCE hInstance, int nCmdShow) {
     if (!registerClass(hInstance)) return false;
 
-    // 读取主显示器 DPI
-    HDC hdc = GetDC(nullptr);
-    dpi_ = static_cast<UINT>(GetDeviceCaps(hdc, LOGPIXELSX));
-    ReleaseDC(nullptr, hdc);
+    // 读取主显示器 DPI（SetProcessDpiAwarenessContext 已在 WinMain 最早设置）
+    dpi_ = GetDpiForSystem();
 
     int w = MulDiv(INIT_WIDTH,  static_cast<int>(dpi_), 96);
     int h = MulDiv(INIT_HEIGHT, static_cast<int>(dpi_), 96);
@@ -180,15 +180,39 @@ LRESULT Window::handleMessage(UINT msg, WPARAM wParam, LPARAM lParam) {
     }
 
     // ── 无边框命中测试 ─────────────────────────────────────────
+    // WM_NCCALCSIZE 返回0去掉了所有非客户区，DefWindowProc 无法
+    // 自动识别边缘。需手动判断 resize 热区（4边 + 4角）。
     case WM_NCHITTEST: {
-        LRESULT def = DefWindowProcW(hwnd_, msg, wParam, lParam);
-        if (def != HTCLIENT) return def;  // 边缘/角落由系统处理
-
         POINT pt;
         pt.x = GET_X_LPARAM(lParam);
         pt.y = GET_Y_LPARAM(lParam);
-        ScreenToClient(hwnd_, &pt);
-        return hitTest(pt);
+
+        RECT rc{};
+        GetWindowRect(hwnd_, &rc);
+
+        // resize 感应宽度（物理像素，与 WebView2 缩进量对齐）
+        const int RB = scale(6);
+
+        bool onLeft   = pt.x <  rc.left   + RB;
+        bool onRight  = pt.x >= rc.right  - RB;
+        bool onTop    = pt.y <  rc.top    + RB;
+        bool onBottom = pt.y >= rc.bottom - RB;
+
+        if (IsZoomed(hwnd_)) {
+            // 最大化时不允许 resize
+        } else {
+            if (onLeft  && onTop)    return HTTOPLEFT;
+            if (onRight && onTop)    return HTTOPRIGHT;
+            if (onLeft  && onBottom) return HTBOTTOMLEFT;
+            if (onRight && onBottom) return HTBOTTOMRIGHT;
+            if (onLeft)              return HTLEFT;
+            if (onRight)             return HTRIGHT;
+            if (onTop)               return HTTOP;
+            if (onBottom)            return HTBOTTOM;
+        }
+
+        // 其余区域交给 WebView2（含 CSS -webkit-app-region:drag）
+        return HTCLIENT;
     }
 
     // ── 激活时阻止系统绘制非客户区 ────────────────────────────
@@ -211,6 +235,19 @@ LRESULT Window::handleMessage(UINT msg, WPARAM wParam, LPARAM lParam) {
         return DefWindowProcW(hwnd_, msg, wParam, lParam);
     }
 
+    // ── DPI 变化（拖到不同密度显示器）────────────────────────
+    case WM_DPICHANGED: {
+        dpi_ = HIWORD(wParam); // 新 DPI（X/Y 相同）
+        // 使用系统推荐的新位置/尺寸
+        auto* rc = reinterpret_cast<RECT*>(lParam);
+        SetWindowPos(hwnd_, nullptr,
+                     rc->left, rc->top,
+                     rc->right  - rc->left,
+                     rc->bottom - rc->top,
+                     SWP_NOZORDER | SWP_NOACTIVATE);
+        return 0;
+    }
+
     // ── 系统主题变化（通知 App 层）────────────────────────────
     case WM_SETTINGCHANGE:
         // 不再 PostMessage 以避免递归，直接让 App 订阅
@@ -227,22 +264,13 @@ LRESULT Window::handleMessage(UINT msg, WPARAM wParam, LPARAM lParam) {
     }
 }
 
-// ─── 无边框标题栏命中测试 ────────────────────────────────────────────────────
+// ─── 无边框命中测试 ──────────────────────────────────────────────────────────
+// 注意：已启用 ICoreWebView2Settings9::IsNonClientRegionSupportEnabled
+// CSS -webkit-app-region:drag 会由 WebView2 自动上报 HTCAPTION
+// 此函数仅用于处理默认的 HTCLIENT 情况，边缘缩放由 DefWindowProc 负责
 
-LRESULT Window::hitTest(POINT pt) const {
-    RECT rc{};
-    GetClientRect(hwnd_, &rc);
-
-    int tbH = scale(TITLEBAR_HEIGHT);
-
-    if (pt.y < tbH) {
-        // 右侧控制按钮区域（3 × 46px = 138px，与前端 JS 对齐）
-        int btnAreaWidth = scale(138);
-        if (pt.x >= rc.right - btnAreaWidth) {
-            return HTCLIENT; // 让 WebView2 / JS 处理按钮点击
-        }
-        return HTCAPTION; // 可拖拽区域
-    }
-
+LRESULT Window::hitTest(POINT /*pt*/) const {
+    // WebView2 + IsNonClientRegionSupportEnabled 已接管标题栏拖拽
+    // 直接返回 HTCLIENT，让 WebView2 内部处理所有鼠标事件
     return HTCLIENT;
 }

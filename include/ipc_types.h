@@ -57,6 +57,7 @@ struct ProcessInfo {
     bool        gpuLimited;  // 是否已应用 GPU 限制
     uint32_t    cpuLimitPct; // CPU 限制百分比
     uint32_t    gpuLimitPct; // GPU 限制百分比
+    std::string iconBase64;  // exe 图标 Base64 PNG（可空）
 };
 
 struct LimitRequest {
