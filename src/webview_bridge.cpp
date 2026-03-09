@@ -107,8 +107,8 @@ bool WebViewBridge::init(HWND hwnd, const std::wstring& uiDir,
                                 ComPtr<ICoreWebView2Controller2> ctrl2;
                                 if (SUCCEEDED(controller_.As(&ctrl2))) {
                                     // COREWEBVIEW2_COLOR: { A, R, G, B }
-                                    // #1a1a1d → RGB(26, 26, 29)
-                                    COREWEBVIEW2_COLOR bg{ 255, 26, 26, 29 };
+                                    // 深色: #202024 → RGB(32, 32, 36)
+                                    COREWEBVIEW2_COLOR bg{ 255, 32, 32, 36 };
                                     ctrl2->put_DefaultBackgroundColor(bg);
                                 }
                             }
@@ -290,6 +290,17 @@ void WebViewBridge::applyBounds(int width, int height) {
         rc = {RB, 0, width - RB, height - RB};
     }
     controller_->put_Bounds(rc);
+}
+
+// ─── 设置 WebView2 背景颜色 ───────────────────────────────────────────────────
+
+void WebViewBridge::setBackgroundColor(uint8_t r, uint8_t g, uint8_t b, uint8_t a) {
+    if (!controller_) return;
+    Microsoft::WRL::ComPtr<ICoreWebView2Controller2> ctrl2;
+    if (SUCCEEDED(controller_.As(&ctrl2))) {
+        COREWEBVIEW2_COLOR bg{ a, r, g, b };
+        ctrl2->put_DefaultBackgroundColor(bg);
+    }
 }
 
 // ─── Debug Fallback：dev server 不通时切换到虚拟主机映射 dist ─────────────────

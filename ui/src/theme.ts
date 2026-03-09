@@ -6,9 +6,11 @@
 
 import { bridge, type Theme } from './bridge'
 
+// 实际生效的主题
 type EffectiveTheme = 'dark' | 'light'
 
 const STORAGE_KEY = 'mcperf-theme'
+const VALID_THEMES: Theme[] = ['dark', 'light', 'system']
 
 class ThemeManager {
   private current: Theme = 'system'
@@ -18,14 +20,15 @@ class ThemeManager {
   constructor() {
     // 监听后端推送的主题变化（系统主题变化时触发）
     bridge.on('themeChanged', ({ theme }) => {
-      this.effective = theme
-      this.applyToDOM(theme)
-      this.listeners.forEach(fn => fn(theme))
+      // 后端返回的是解析后的实际主题
+      this.effective = theme as EffectiveTheme
+      this.applyToDOM(theme as EffectiveTheme)
+      this.listeners.forEach(fn => fn(theme as EffectiveTheme))
     })
 
     // 读取本地存储的偏好，立即恢复
     const saved = localStorage.getItem(STORAGE_KEY) as Theme | null
-    if (saved && (['dark', 'light', 'system'] as Theme[]).includes(saved)) {
+    if (saved && VALID_THEMES.includes(saved)) {
       this.current = saved
     }
   }

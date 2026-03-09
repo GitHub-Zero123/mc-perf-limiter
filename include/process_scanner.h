@@ -60,6 +60,19 @@ private:
     // 读取单进程 GPU 使用率（PDH）
     double measureGpuUsage(uint32_t pid);
 
+    // IO 差分状态（字节/秒）
+    struct IoSample {
+        ULONGLONG readBytes  = 0;
+        ULONGLONG writeBytes = 0;
+        ULONGLONG wallTime   = 0;
+    };
+    std::unordered_map<uint32_t, IoSample> ioPrev_;
+
+    // 采集内存使用量（字节）
+    static uint64_t measureMemoryUsage(HANDLE hProcess);
+    // 采集 IO 速率（字节/秒），返回 {readBytesPerSec, writeBytesPerSec}
+    std::pair<uint64_t, uint64_t> measureIoRate(uint32_t pid, HANDLE hProcess);
+
     // 获取进程完整路径
     static std::string getProcessPath(HANDLE hProcess);
 

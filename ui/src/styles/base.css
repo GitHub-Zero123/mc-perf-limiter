@@ -116,6 +116,11 @@ html, body, #app {
   overflow: hidden;
 }
 
+html {
+  /* 毛玻璃主题下html背景透明，让Mica穿透 */
+  background: transparent;
+}
+
 body {
   background-color: var(--bg-base);
   color: var(--text-primary);
@@ -452,7 +457,7 @@ button, input, select {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  max-width: 600px;
+  width: 100%;
   animation: fadeIn .15s ease;
 }
 
@@ -512,6 +517,41 @@ button, input, select {
 
 /* ── 实时图表 ────────────────────────────────────────────────────── */
 .chart-wrap { display: flex; flex-direction: column; gap: 8px; }
+
+/* ── 统计网格（内存、IO）────────────────────────────────────────── */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px 8px;
+  padding-top: 10px;
+  margin-top: 2px;
+  border-top: 1px solid var(--border-light);
+}
+
+.stat-item {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius);
+  padding: 6px 8px;
+}
+
+.stat-label {
+  font-size: 10px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  font-weight: 500;
+}
+
+.stat-value {
+  font-size: 12px;
+  font-family: 'Cascadia Code', Consolas, monospace;
+  color: var(--text-primary);
+  font-weight: 500;
+}
 
 .chart-row {
   display: flex;
@@ -708,7 +748,6 @@ input[type="range"] {
   gap: 8px;
   padding: 6px 12px 6px 10px;
   font-size: 12px;
-  color: var(--text-primary);
   cursor: pointer;
   transition: background .1s;
   white-space: nowrap;
@@ -716,8 +755,40 @@ input[type="range"] {
 
 .theme-menu-item:hover { background: var(--bg-hover); }
 
-/* icon 单独控色，不影响文字 text node */
-.theme-menu-item > svg { flex-shrink: 0; color: var(--icon-default); opacity: .85; }
+/* 菜单图标：使用固定颜色，不继承主题变量 */
+.theme-menu-icon {
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+
+/* 深色主题下图标用亮色 */
+:root .theme-menu-icon,
+[data-theme="dark"] .theme-menu-icon {
+  fill: #a0a0a8;
+  stroke: #a0a0a8;
+}
+
+/* 浅色主题下图标用深色 */
+[data-theme="light"] .theme-menu-icon {
+  fill: #56565e;
+  stroke: #56565e;
+}
+
+/* 菜单项文字标签：根据菜单背景色设置文字颜色 */
+.theme-menu-label {
+  flex: 1;
+}
+
+/* 深色主题下菜单背景是深色，用亮色文字 */
+:root .theme-menu-label,
+[data-theme="dark"] .theme-menu-label {
+  color: #e0e0e3;
+}
+
+/* 浅色主题下菜单背景是浅色，用深色文字 */
+[data-theme="light"] .theme-menu-label {
+  color: #1a1a1e;
+}
 
 .theme-menu-check {
   margin-left: auto;

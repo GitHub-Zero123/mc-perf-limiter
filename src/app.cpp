@@ -9,8 +9,13 @@
 #include <nlohmann/json.hpp>
 #include <string>
 #include <stdexcept>
+#include <mutex>
+#include <vector>
 
 using json = nlohmann::json;
+
+// 自定义窗口消息：后台线程投递进程列表到 UI 线程
+static constexpr UINT WM_APP_PROCESS_UPDATE = WM_APP + 1;
 
 // ─── 宏：UI 目录（由 CMake 注入）────────────────────────────────────────────
 
@@ -95,11 +100,11 @@ int App::run(HINSTANCE hInstance, int nCmdShow) {
             sendEvent(ipc::EVT_THEME_CHANGED,
                 { {"theme", ipc::theme_to_str(t)} });
 
-            // 启动进程扫描器
+            // 启动进程扫描器（每 1000ms 更新一次）
             scanner_->start(
                 [this](const std::vector<ipc::ProcessInfo>& list) {
                     onProcessListUpdate(list);
-                }, 800);
+                }, 1000);
         });
 
     // ── 窗口大小变化时 resize WebView ─────────────────────────
@@ -113,9 +118,17 @@ int App::run(HINSTANCE hInstance, int nCmdShow) {
             int w = LOWORD(lp);
             int ht = HIWORD(lp);
             if (app->bridge_) app->bridge_->resize(w, ht);
+            
+            // 通知前端窗口状态变化（最大化/还原）
+            bool maximized = (wp == SIZE_MAXIMIZED);
+            app->sendEvent(ipc::EVT_WINDOW_STATE, {{"maximized", maximized}});
         } else if (msg == WM_SETTINGCHANGE) {
             if (app->themeDetector_)
                 app->themeDetector_->onSettingChange(wp, lp);
+        } else if (msg == WM_APP_PROCESS_UPDATE) {
+            // 后台扫描线程通知有新数据，在 UI 线程刷新到前端
+            app->flushProcessList();
+            return 0;
         }
         return DefSubclassProc(hWnd, msg, wp, lp);
     }, 1, reinterpret_cast<DWORD_PTR>(this));
@@ -186,9 +199,17 @@ void App::handleSetTheme(const json& payload) {
     ipc::Theme t = ipc::str_to_theme(themeStr);
     themeDetector_->setUserPreference(t);
 
-    // 立即更新 DWM 颜色
+    // 解析并应用主题
     ipc::Theme effective = ThemeDetector::resolveTheme(t);
-    window_->applyDarkMode(effective == ipc::Theme::Dark);
+    bool dark = (effective == ipc::Theme::Dark);
+    window_->applyDarkMode(dark);
+    
+    // 设置 WebView2 背景颜色
+    if (dark) {
+        bridge_->setBackgroundColor(32, 32, 36, 255);  // #202024
+    } else {
+        bridge_->setBackgroundColor(243, 243, 243, 255);  // #f3f3f3
+    }
 }
 
 void App::handleWindowControl(const json& payload) {
@@ -226,19 +247,46 @@ void App::sendError(const std::string& message) {
 // ─── 子系统回调 ───────────────────────────────────────────────────────────────
 
 void App::onProcessListUpdate(const std::vector<ipc::ProcessInfo>& list) {
+    // 后台线程调用：缓存数据，PostMessage 通知 UI 线程
+    {
+        std::lock_guard<std::mutex> lock(pendingMtx_);
+        pendingList_  = list;
+        pendingDirty_ = true;
+    }
+    // 投递到 UI 线程处理（避免跨线程 COM 调用）
+    if (window_ && window_->hwnd()) {
+        PostMessageW(window_->hwnd(), WM_APP_PROCESS_UPDATE, 0, 0);
+    }
+}
+
+void App::flushProcessList() {
+    // UI 线程调用：从缓存读取并发送到前端
+    std::vector<ipc::ProcessInfo> list;
+    {
+        std::lock_guard<std::mutex> lock(pendingMtx_);
+        if (!pendingDirty_) return;
+        list = pendingList_;
+        pendingDirty_ = false;
+    }
+
     json arr = json::array();
     for (const auto& p : list) {
         arr.push_back({
-            {"pid",        p.pid},
-            {"name",       p.name},
-            {"exePath",    p.exePath},
-            {"cpuUsage",   p.cpuUsage},
-            {"gpuUsage",   p.gpuUsage},
-            {"cpuLimited", cpuLimiter_->hasLimit(p.pid)},
-            {"gpuLimited", gpuLimiter_->hasLimit(p.pid)},
-            {"cpuLimitPct",cpuLimiter_->getLimit(p.pid)},
-            {"gpuLimitPct",gpuLimiter_->getLimit(p.pid)},
-            {"iconBase64", p.iconBase64}
+            {"pid",          p.pid},
+            {"name",         p.name},
+            {"exePath",      p.exePath},
+            {"cpuUsage",     p.cpuUsage},
+            {"gpuUsage",     p.gpuUsage},
+            {"memoryUsage",  p.memoryUsage},
+            {"ioReadBytes",  p.ioReadBytes},
+            {"ioWriteBytes", p.ioWriteBytes},
+            {"netRecvBytes", p.netRecvBytes},
+            {"netSendBytes", p.netSendBytes},
+            {"cpuLimited",   cpuLimiter_->hasLimit(p.pid)},
+            {"gpuLimited",   gpuLimiter_->hasLimit(p.pid)},
+            {"cpuLimitPct",  cpuLimiter_->getLimit(p.pid)},
+            {"gpuLimitPct",  gpuLimiter_->getLimit(p.pid)},
+            {"iconBase64",   p.iconBase64}
         });
     }
     sendEvent(ipc::EVT_PROCESS_LIST, arr);

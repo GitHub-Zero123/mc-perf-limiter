@@ -9,6 +9,8 @@
 #include <nlohmann/json.hpp>
 #include <string>
 #include <memory>
+#include <mutex>
+#include <vector>
 
 // 应用主类 — 协调各子系统
 class App {
@@ -29,6 +31,11 @@ private:
 
     std::wstring uiDir_;
 
+    // ── 跨线程进程列表缓冲（后台线程写，UI线程读）────────────
+    std::mutex                       pendingMtx_;
+    std::vector<ipc::ProcessInfo>    pendingList_;   // 最新一次扫描结果
+    bool                             pendingDirty_ = false;
+
     // ── IPC 分发 ──────────────────────────────────────────────
     // 处理来自 JS 的消息
     void onMessage(const std::string& jsonStr);
@@ -46,7 +53,10 @@ private:
     void sendError(const std::string& message);
 
     // ── 子系统回调 ────────────────────────────────────────────
+    // 后台线程调用（不得直接操作 COM）
     void onProcessListUpdate(const std::vector<ipc::ProcessInfo>& list);
+    // UI 线程执行的实际发送逻辑
+    void flushProcessList();
     void onThemeChange(ipc::Theme effectiveTheme);
 
     // 初始化 UI 目录路径

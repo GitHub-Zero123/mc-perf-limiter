@@ -30,29 +30,30 @@ const btnRefresh     = document.getElementById('btn-refresh')!
 // 动态创建下拉菜单
 const themeMenu = document.createElement('div')
 themeMenu.className = 'theme-menu'
+// 菜单颜色由CSS根据data-theme控制，这里不硬编码颜色
 themeMenu.innerHTML = `
   <div class="theme-menu-item" data-theme="dark">
-    <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+    <svg class="theme-menu-icon" width="12" height="12" viewBox="0 0 16 16">
       <path d="M6 1a7 7 0 100 14c-3.1 0-5.7-2-6.6-4.8A5 5 0 108.7 2.3 7 7 0 006 1z"/>
     </svg>
-    深色
+    <span class="theme-menu-label">深色</span>
     <span class="theme-menu-check" id="check-dark"></span>
   </div>
   <div class="theme-menu-item" data-theme="light">
-    <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+    <svg class="theme-menu-icon" width="12" height="12" viewBox="0 0 16 16">
       <circle cx="8" cy="8" r="3"/>
-      <path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.2 3.2l1.4 1.4M11.4 11.4l1.4 1.4M3.2 12.8l1.4-1.4M11.4 4.6l1.4-1.4" stroke="currentColor" stroke-width="1.5" fill="none"/>
+      <path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.2 3.2l1.4 1.4M11.4 11.4l1.4 1.4M3.2 12.8l1.4-1.4M11.4 4.6l1.4-1.4" stroke-width="1.5" fill="none"/>
     </svg>
-    浅色
+    <span class="theme-menu-label">浅色</span>
     <span class="theme-menu-check" id="check-light"></span>
   </div>
   <div class="theme-menu-sep"></div>
   <div class="theme-menu-item" data-theme="system">
-    <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
-      <rect x="1" y="2" width="14" height="10" rx="1" stroke="currentColor" stroke-width="1.2" fill="none"/>
-      <path d="M5 14h6M8 12v2" stroke="currentColor" stroke-width="1.2"/>
+    <svg class="theme-menu-icon" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke-width="1.2">
+      <rect x="1" y="2" width="14" height="10" rx="1"/>
+      <path d="M5 14h6M8 12v2"/>
     </svg>
-    跟随系统
+    <span class="theme-menu-label">跟随系统</span>
     <span class="theme-menu-check" id="check-system"></span>
   </div>
 `
@@ -65,8 +66,28 @@ function updateThemeMenuChecks() {
   document.getElementById('check-system')!.textContent = t === 'system' ? '✓' : ''
 }
 
+function updateThemeMenuColors() {
+  // 根据当前主题确定菜单颜色
+  const theme = document.documentElement.getAttribute('data-theme') || 'dark'
+  const isDark = theme === 'dark'
+  
+  // 设置文字颜色
+  const labelColor = isDark ? '#e0e0e3' : '#1a1a1e'
+  const iconColor = isDark ? '#a0a0a8' : '#56565e'
+  
+  themeMenu.querySelectorAll<HTMLElement>('.theme-menu-label').forEach(el => {
+    el.style.color = labelColor
+  })
+  
+  themeMenu.querySelectorAll<SVGElement>('.theme-menu-icon').forEach(el => {
+    el.style.fill = iconColor
+    el.style.stroke = iconColor
+  })
+}
+
 function showThemeMenu() {
   updateThemeMenuChecks()
+  updateThemeMenuColors()
   const rect = btnTheme.getBoundingClientRect()
   themeMenu.style.right  = `${document.documentElement.clientWidth - rect.right}px`
   themeMenu.style.top    = `${rect.bottom + 4}px`
@@ -104,8 +125,7 @@ btnMinimize.addEventListener('click', () =>
 
 btnMaximize.addEventListener('click', () => {
   bridge.send({ cmd: 'windowControl', payload: { action: 'maximizeRestore' } })
-  isMaximized = !isMaximized
-  updateMaximizeIcon()
+  // 状态由后端 windowState 事件同步，不在此处手动切换
 })
 
 btnClose.addEventListener('click', () =>
@@ -114,13 +134,18 @@ btnClose.addEventListener('click', () =>
 function updateMaximizeIcon() {
   const svg = btnMaximize.querySelector('svg')
   if (!svg) return
+  // 注意：isMaximized 表示当前状态，图标应显示"点击后将进入的状态"
+  // 当前是最大化 → 显示"还原"图标（两个窗口重叠）
+  // 当前未最大化 → 显示"最大化"图标（单个矩形）
   if (isMaximized) {
+    // 最大化状态 → 显示"还原"图标（双窗口）
     svg.innerHTML = `
       <rect x="2.5" y="0.5" width="7" height="7" stroke="currentColor" stroke-width="1" fill="none"/>
       <polyline points="2,2 0.5,2 0.5,9.5 8,9.5 8,7.5" stroke="currentColor" stroke-width="1" fill="none"/>
     `
     btnMaximize.title = '还原'
   } else {
+    // 普通窗口状态 → 显示"最大化"图标（单矩形）
     svg.innerHTML = `<rect x="0.5" y="0.5" width="9" height="9" stroke="currentColor" fill="none"/>`
     btnMaximize.title = '最大化'
   }
@@ -264,11 +289,13 @@ function patchProcessList() {
 }
 
 /** 兼容旧调用 */
-function renderProcessList() {
+function _renderProcessList() {
   // 首次渲染强制全量
   elProcessList.innerHTML = ''
   patchProcessList()
 }
+// 保留函数引用防止 tree-shaking
+void _renderProcessList
 
 // 绑定点击事件（patchProcessList 内对新节点单独绑定，此处仅作兼容保留）
 elProcessList.addEventListener('click', (e) => {
@@ -283,7 +310,10 @@ elProcessList.addEventListener('click', (e) => {
 
 function selectProcess(pid: number) {
   selectedPid = pid
-  renderProcessList()
+  // 只更新列表项的 active 状态，不重建 DOM（保持增量更新能正常工作）
+  elProcessList.querySelectorAll<HTMLElement>('.process-item').forEach(el => {
+    el.classList.toggle('active', el.dataset.pid === String(pid))
+  })
   const proc = processList.find(p => p.pid === pid)
   if (!proc) return
   renderDetailPanel(proc)
@@ -292,7 +322,13 @@ function selectProcess(pid: number) {
 function renderNoSelection() {
   elMainContent.innerHTML = `
     <div class="no-selection">
-      <div class="no-selection-icon">🎮</div>
+      <div class="no-selection-icon">
+        <svg width="40" height="40" viewBox="0 0 40 40" fill="none" style="opacity:.25">
+          <rect x="4" y="10" width="32" height="24" rx="4" stroke="currentColor" stroke-width="2"/>
+          <path d="M14 22h12M20 18v8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          <circle cx="20" cy="6" r="2" fill="currentColor" opacity=".5"/>
+        </svg>
+      </div>
       <div class="no-selection-text">请从左侧选择一个 Minecraft 进程</div>
       <div class="no-selection-hint">未检测到进程时，请点击刷新重新扫描</div>
     </div>`
@@ -342,6 +378,20 @@ function renderDetailPanel(proc: ProcessInfo) {
                      style="width:${clamp(proc.gpuUsage)}%"></div>
               </div>
               <span class="chart-value" id="val-gpu">${proc.gpuUsage.toFixed(1)}%</span>
+            </div>
+          </div>
+          <div class="stats-grid">
+            <div class="stat-item">
+              <span class="stat-label">内存占用</span>
+              <span class="stat-value" id="val-mem">${formatBytes(proc.memoryUsage || 0)}</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">IO 读取</span>
+              <span class="stat-value" id="val-io-r">${formatSpeed(proc.ioReadBytes || 0)}</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">IO 写入</span>
+              <span class="stat-value" id="val-io-w">${formatSpeed(proc.ioWriteBytes || 0)}</span>
             </div>
           </div>
         </div>
@@ -429,6 +479,7 @@ function bindDetailEvents(pid: number) {
 // ─── 更新实时使用率 ───────────────────────────────────────────────────────────
 
 function updateDetailUsage(proc: ProcessInfo) {
+  // CPU/GPU 进度条
   const barCpu = document.getElementById('bar-cpu')
   const valCpu = document.getElementById('val-cpu')
   const barGpu = document.getElementById('bar-gpu')
@@ -437,6 +488,14 @@ function updateDetailUsage(proc: ProcessInfo) {
   if (valCpu) valCpu.textContent  = `${proc.cpuUsage.toFixed(1)}%`
   if (barGpu) barGpu.style.width = `${clamp(proc.gpuUsage)}%`
   if (valGpu) valGpu.textContent  = `${proc.gpuUsage.toFixed(1)}%`
+
+  // 内存、IO 统计
+  const valMem = document.getElementById('val-mem')
+  const valIoR = document.getElementById('val-io-r')
+  const valIoW = document.getElementById('val-io-w')
+  if (valMem) valMem.textContent = formatBytes(proc.memoryUsage || 0)
+  if (valIoR) valIoR.textContent = formatSpeed(proc.ioReadBytes || 0)
+  if (valIoW) valIoW.textContent = formatSpeed(proc.ioWriteBytes || 0)
 }
 
 // ─── 事件：限制结果 ───────────────────────────────────────────────────────────
@@ -457,6 +516,13 @@ bridge.on('themeChanged', ({ theme }) => {
   themeManager.applyToDOM(theme)
 })
 
+// ─── 事件：窗口状态变化（最大化/还原）────────────────────────────────────────
+
+bridge.on('windowState', ({ maximized }) => {
+  isMaximized = maximized
+  updateMaximizeIcon()
+})
+
 // ─── 工具函数 ─────────────────────────────────────────────────────────────────
 
 function escHtml(s: string): string {
@@ -472,6 +538,24 @@ function truncate(s: string, maxLen: number): string {
 
 function clamp(v: number): number {
   return Math.min(Math.max(v, 0), 100)
+}
+
+/** 格式化字节数为人类可读的单位 */
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return '0 B'
+  const units = ['B', 'KB', 'MB', 'GB', 'TB']
+  const i = Math.floor(Math.log(bytes) / Math.log(1024))
+  const value = bytes / Math.pow(1024, i)
+  return `${value.toFixed(1)} ${units[i]}`
+}
+
+/** 格式化速度为人类可读的单位 */
+function formatSpeed(bytesPerSec: number): string {
+  if (bytesPerSec === 0) return '0 B/s'
+  const units = ['B/s', 'KB/s', 'MB/s', 'GB/s']
+  const i = Math.floor(Math.log(bytesPerSec) / Math.log(1024))
+  const value = bytesPerSec / Math.pow(1024, i)
+  return `${value.toFixed(1)} ${units[i]}`
 }
 
 // ─── 侧边栏拖拽 Resize ────────────────────────────────────────────────────────
@@ -507,7 +591,7 @@ function clamp(v: number): number {
       document.documentElement.style.setProperty('--sidebar-width', `${newW}px`)
     }
 
-    const onUp = (ev: MouseEvent) => {
+    const onUp = (_ev: MouseEvent) => {
       document.removeEventListener('mousemove', onMove)
       document.removeEventListener('mouseup',   onUp)
       resizer.classList.remove('dragging')

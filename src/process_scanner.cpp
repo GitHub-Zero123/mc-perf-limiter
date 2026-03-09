@@ -297,6 +297,55 @@ double ProcessScanner::measureCpuUsage(uint32_t pid, HANDLE hProcess) {
     return (std::min)(usage, 100.0);
 }
 
+// ─── 内存使用量 ───────────────────────────────────────────────────────────────
+
+uint64_t ProcessScanner::measureMemoryUsage(HANDLE hProcess) {
+    PROCESS_MEMORY_COUNTERS_EX pmc{};
+    pmc.cb = sizeof(pmc);
+    if (!GetProcessMemoryInfo(hProcess,
+            reinterpret_cast<PROCESS_MEMORY_COUNTERS*>(&pmc), sizeof(pmc)))
+        return 0;
+    // PrivateUsage = 进程独占物理内存（Working Set 的私有部分）
+    return static_cast<uint64_t>(pmc.PrivateUsage);
+}
+
+// ─── IO 速率（差分法，字节/秒）────────────────────────────────────────────────
+
+std::pair<uint64_t, uint64_t> ProcessScanner::measureIoRate(
+        uint32_t pid, HANDLE hProcess) {
+    IO_COUNTERS ioc{};
+    if (!GetProcessIoCounters(hProcess, &ioc))
+        return {0, 0};
+
+    FILETIME ftNow{};
+    GetSystemTimeAsFileTime(&ftNow);
+    auto toULL = [](const FILETIME& ft) -> ULONGLONG {
+        return (static_cast<ULONGLONG>(ft.dwHighDateTime) << 32) | ft.dwLowDateTime;
+    };
+    ULONGLONG wallNow = toULL(ftNow);
+
+    auto it = ioPrev_.find(pid);
+    if (it == ioPrev_.end()) {
+        ioPrev_[pid] = { ioc.ReadTransferCount, ioc.WriteTransferCount, wallNow };
+        return {0, 0};
+    }
+
+    auto& prev = it->second;
+    ULONGLONG dWall  = wallNow - prev.wallTime;
+    if (dWall == 0) return {0, 0};
+
+    // dWall 单位为 100ns，转换为秒
+    double secs = static_cast<double>(dWall) / 10000000.0;
+
+    uint64_t readPS  = static_cast<uint64_t>(
+        (ioc.ReadTransferCount  - prev.readBytes)  / secs);
+    uint64_t writePS = static_cast<uint64_t>(
+        (ioc.WriteTransferCount - prev.writeBytes) / secs);
+
+    prev = { ioc.ReadTransferCount, ioc.WriteTransferCount, wallNow };
+    return {readPS, writePS};
+}
+
 // ─── GPU 使用率（PDH）────────────────────────────────────────────────────────
 
 double ProcessScanner::measureGpuUsage(uint32_t pid) {
@@ -367,11 +416,18 @@ std::vector<ipc::ProcessInfo> ProcessScanner::scanOnce() {
         if (!hProc) continue;
 
         ipc::ProcessInfo info{};
-        info.pid      = pid;
-        info.name     = wide_to_utf8(name);
-        info.exePath  = getProcessPath(hProc);
-        info.cpuUsage = measureCpuUsage(pid, hProc);
-        info.gpuUsage = measureGpuUsage(pid);
+        info.pid        = pid;
+        info.name       = wide_to_utf8(name);
+        info.exePath    = getProcessPath(hProc);
+        info.cpuUsage   = measureCpuUsage(pid, hProc);
+        info.gpuUsage   = measureGpuUsage(pid);
+        info.memoryUsage = measureMemoryUsage(hProc);
+        auto [ioR, ioW] = measureIoRate(pid, hProc);
+        info.ioReadBytes  = ioR;
+        info.ioWriteBytes = ioW;
+        // 网络流量：暂未实现，置零
+        info.netRecvBytes = 0;
+        info.netSendBytes = 0;
 
         // 图标：首次出现时提取并缓存，避免每次扫描重复解码
         auto iconIt = iconCache_.find(pid);
@@ -388,21 +444,21 @@ std::vector<ipc::ProcessInfo> ProcessScanner::scanOnce() {
 
     CloseHandle(hSnap);
 
-    // 清理已消失进程的历史 CPU 样本 & 图标缓存
+    // 清理已消失进程的历史样本 & 图标缓存
     std::vector<uint32_t> foundPids;
     for (auto& p : result) foundPids.push_back(p.pid);
-    for (auto it = cpuPrev_.begin(); it != cpuPrev_.end(); ) {
-        bool found = false;
-        for (auto pid : foundPids)
-            if (pid == it->first) { found = true; break; }
-        it = found ? std::next(it) : cpuPrev_.erase(it);
-    }
-    for (auto it = iconCache_.begin(); it != iconCache_.end(); ) {
-        bool found = false;
-        for (auto pid : foundPids)
-            if (pid == it->first) { found = true; break; }
-        it = found ? std::next(it) : iconCache_.erase(it);
-    }
+
+    auto cleanMap = [&foundPids](auto& m) {
+        for (auto it = m.begin(); it != m.end(); ) {
+            bool found = false;
+            for (auto pid : foundPids)
+                if (pid == it->first) { found = true; break; }
+            it = found ? std::next(it) : m.erase(it);
+        }
+    };
+    cleanMap(cpuPrev_);
+    cleanMap(ioPrev_);
+    cleanMap(iconCache_);
 
     return result;
 }

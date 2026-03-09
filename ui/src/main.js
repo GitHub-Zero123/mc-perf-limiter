@@ -28,7 +28,7 @@ themeMenu.innerHTML = `
     <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
       <path d="M6 1a7 7 0 100 14c-3.1 0-5.7-2-6.6-4.8A5 5 0 108.7 2.3 7 7 0 006 1z"/>
     </svg>
-    深色
+    <span class="theme-menu-label">深色</span>
     <span class="theme-menu-check" id="check-dark"></span>
   </div>
   <div class="theme-menu-item" data-theme="light">
@@ -36,8 +36,25 @@ themeMenu.innerHTML = `
       <circle cx="8" cy="8" r="3"/>
       <path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.2 3.2l1.4 1.4M11.4 11.4l1.4 1.4M3.2 12.8l1.4-1.4M11.4 4.6l1.4-1.4" stroke="currentColor" stroke-width="1.5" fill="none"/>
     </svg>
-    浅色
+    <span class="theme-menu-label">浅色</span>
     <span class="theme-menu-check" id="check-light"></span>
+  </div>
+  <div class="theme-menu-sep"></div>
+  <div class="theme-menu-item" data-theme="mica-dark">
+    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2">
+      <rect x="1" y="1" width="14" height="14" rx="2"/>
+      <path d="M1 5h14M5 5v10" opacity=".5"/>
+    </svg>
+    <span class="theme-menu-label">毛玻璃深色</span>
+    <span class="theme-menu-check" id="check-mica-dark"></span>
+  </div>
+  <div class="theme-menu-item" data-theme="mica-light">
+    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2">
+      <rect x="1" y="1" width="14" height="14" rx="2"/>
+      <path d="M1 5h14M5 5v10" opacity=".5"/>
+    </svg>
+    <span class="theme-menu-label">毛玻璃浅色</span>
+    <span class="theme-menu-check" id="check-mica-light"></span>
   </div>
   <div class="theme-menu-sep"></div>
   <div class="theme-menu-item" data-theme="system">
@@ -45,7 +62,7 @@ themeMenu.innerHTML = `
       <rect x="1" y="2" width="14" height="10" rx="1" stroke="currentColor" stroke-width="1.2" fill="none"/>
       <path d="M5 14h6M8 12v2" stroke="currentColor" stroke-width="1.2"/>
     </svg>
-    跟随系统
+    <span class="theme-menu-label">跟随系统</span>
     <span class="theme-menu-check" id="check-system"></span>
   </div>
 `;
@@ -54,6 +71,8 @@ function updateThemeMenuChecks() {
     const t = themeManager.getPreference();
     document.getElementById('check-dark').textContent = t === 'dark' ? '✓' : '';
     document.getElementById('check-light').textContent = t === 'light' ? '✓' : '';
+    document.getElementById('check-mica-dark').textContent = t === 'mica-dark' ? '✓' : '';
+    document.getElementById('check-mica-light').textContent = t === 'mica-light' ? '✓' : '';
     document.getElementById('check-system').textContent = t === 'system' ? '✓' : '';
 }
 function showThemeMenu() {
@@ -88,15 +107,18 @@ document.addEventListener('click', () => hideThemeMenu());
 btnMinimize.addEventListener('click', () => bridge.send({ cmd: 'windowControl', payload: { action: 'minimize' } }));
 btnMaximize.addEventListener('click', () => {
     bridge.send({ cmd: 'windowControl', payload: { action: 'maximizeRestore' } });
-    isMaximized = !isMaximized;
-    updateMaximizeIcon();
+    // 状态由后端 windowState 事件同步，不在此处手动切换
 });
 btnClose.addEventListener('click', () => bridge.send({ cmd: 'windowControl', payload: { action: 'close' } }));
 function updateMaximizeIcon() {
     const svg = btnMaximize.querySelector('svg');
     if (!svg)
         return;
+    // 注意：isMaximized 表示当前状态，图标应显示"点击后将进入的状态"
+    // 当前是最大化 → 显示"还原"图标（两个窗口重叠）
+    // 当前未最大化 → 显示"最大化"图标（单个矩形）
     if (isMaximized) {
+        // 最大化状态 → 显示"还原"图标（双窗口）
         svg.innerHTML = `
       <rect x="2.5" y="0.5" width="7" height="7" stroke="currentColor" stroke-width="1" fill="none"/>
       <polyline points="2,2 0.5,2 0.5,9.5 8,9.5 8,7.5" stroke="currentColor" stroke-width="1" fill="none"/>
@@ -104,6 +126,7 @@ function updateMaximizeIcon() {
         btnMaximize.title = '还原';
     }
     else {
+        // 普通窗口状态 → 显示"最大化"图标（单矩形）
         svg.innerHTML = `<rect x="0.5" y="0.5" width="9" height="9" stroke="currentColor" fill="none"/>`;
         btnMaximize.title = '最大化';
     }
@@ -123,11 +146,20 @@ function setCount(n) {
         elStatusCount.textContent = `${n} 个进程`;
 }
 // ─── 进程列表更新 ─────────────────────────────────────────────────────────────
+// SVG 图标模板（游戏手柄）
+const PROCESS_ICON_SVG = `
+  <svg class="process-icon-svg" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect x="1" y="4" width="14" height="9" rx="2" stroke="currentColor" stroke-width="1.2"/>
+    <line x1="5" y1="8.5" x2="7" y2="8.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+    <line x1="6" y1="7.5" x2="6" y2="9.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+    <circle cx="10" cy="7.8" r="0.7" fill="currentColor"/>
+    <circle cx="11.6" cy="9.2" r="0.7" fill="currentColor"/>
+  </svg>`;
 bridge.on('processList', (list) => {
     processList = list;
     setStatus(list.length > 0 ? '扫描完成' : '未发现 Minecraft 进程');
     setCount(list.length);
-    renderProcessList();
+    patchProcessList();
     if (selectedPid !== null) {
         const proc = list.find(p => p.pid === selectedPid);
         if (proc) {
@@ -139,51 +171,115 @@ bridge.on('processList', (list) => {
         }
     }
 });
-function renderProcessList() {
+/** 创建单个进程列表项 DOM */
+function createProcessItem(p) {
+    const el = document.createElement('div');
+    el.className = `process-item${p.pid === selectedPid ? ' active' : ''}`;
+    el.dataset.pid = String(p.pid);
+    // 图标：优先用 exe 图标，无则降级 SVG
+    const iconHtml = p.iconBase64
+        ? `<img class="process-icon-img" src="${p.iconBase64}" alt="" draggable="false"/>`
+        : PROCESS_ICON_SVG;
+    el.innerHTML = `
+    <span class="process-item-icon">${iconHtml}</span>
+    <div class="process-item-info">
+      <div class="process-item-name" title="${escHtml(p.name)}">${escHtml(p.name)}</div>
+      <div class="process-item-pid">PID ${p.pid}</div>
+    </div>
+    <div class="process-item-right">
+      <div class="process-item-usage" data-usage>CPU ${p.cpuUsage.toFixed(1)}%<br>GPU ${p.gpuUsage.toFixed(1)}%</div>
+      <div class="process-item-badges" data-badges>
+        ${p.cpuLimited ? '<span class="badge badge-cpu">CPU</span>' : ''}
+        ${p.gpuLimited ? '<span class="badge badge-gpu">GPU</span>' : ''}
+      </div>
+    </div>`;
+    el.addEventListener('click', () => selectProcess(p.pid));
+    return el;
+}
+/**
+ * 增量更新进程列表 DOM：
+ * - 新进程 → 插入对应位置
+ * - 已有进程 → 只更新 usage / badge 文字
+ * - 消失进程 → 移除 DOM 节点
+ */
+function patchProcessList() {
+    // 空状态
     if (processList.length === 0) {
         elProcessList.innerHTML = `
       <div class="process-empty">
-        <span>🎮</span>
-        <span>未发现 Minecraft 进程</span>
-      </div>`;
-        return;
-    }
-    elProcessList.innerHTML = processList.map(p => `
-    <div class="process-item ${p.pid === selectedPid ? 'active' : ''}"
-         data-pid="${p.pid}">
-      <span class="process-item-icon">
-        <svg class="process-icon-svg" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style="opacity:.4">
           <rect x="1" y="4" width="14" height="9" rx="2" stroke="currentColor" stroke-width="1.2"/>
           <line x1="5" y1="8.5" x2="7" y2="8.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
           <line x1="6" y1="7.5" x2="6" y2="9.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
           <circle cx="10" cy="7.8" r="0.7" fill="currentColor"/>
           <circle cx="11.6" cy="9.2" r="0.7" fill="currentColor"/>
         </svg>
-      </span>
-      <div class="process-item-info">
-        <div class="process-item-name" title="${escHtml(p.name)}">${escHtml(p.name)}</div>
-        <div class="process-item-pid">PID ${p.pid}</div>
-      </div>
-      <div class="process-item-right">
-        <div class="process-item-usage">CPU ${p.cpuUsage.toFixed(1)}%<br>GPU ${p.gpuUsage.toFixed(1)}%</div>
-        <div class="process-item-badges">
-          ${p.cpuLimited ? '<span class="badge badge-cpu">CPU</span>' : ''}
-          ${p.gpuLimited ? '<span class="badge badge-gpu">GPU</span>' : ''}
-        </div>
-      </div>
-    </div>
-  `).join('');
+        <span>未发现 Minecraft 进程</span>
+      </div>`;
+        return;
+    }
+    // 移除空状态节点（如果有）
+    const emptyEl = elProcessList.querySelector('.process-empty');
+    if (emptyEl)
+        elProcessList.innerHTML = '';
+    const newPids = new Set(processList.map(p => p.pid));
+    // 移除已消失的进程
     elProcessList.querySelectorAll('.process-item').forEach(el => {
-        el.addEventListener('click', () => {
-            const pid = parseInt(el.dataset.pid ?? '0');
-            selectProcess(pid);
-        });
+        const pid = parseInt(el.dataset.pid ?? '0');
+        if (!newPids.has(pid))
+            el.remove();
+    });
+    // 逐个进程对比更新
+    processList.forEach((p, idx) => {
+        const existing = elProcessList.querySelector(`.process-item[data-pid="${p.pid}"]`);
+        if (existing) {
+            // 只更新 usage 和 badges
+            const usageEl = existing.querySelector('[data-usage]');
+            if (usageEl)
+                usageEl.innerHTML = `CPU ${p.cpuUsage.toFixed(1)}%<br>GPU ${p.gpuUsage.toFixed(1)}%`;
+            const badgesEl = existing.querySelector('[data-badges]');
+            if (badgesEl)
+                badgesEl.innerHTML =
+                    `${p.cpuLimited ? '<span class="badge badge-cpu">CPU</span>' : ''}` +
+                        `${p.gpuLimited ? '<span class="badge badge-gpu">GPU</span>' : ''}`;
+            // 同步 active 状态
+            existing.classList.toggle('active', p.pid === selectedPid);
+            // 确保顺序正确
+            const items = elProcessList.querySelectorAll('.process-item');
+            if (items[idx] !== existing)
+                elProcessList.insertBefore(existing, items[idx] ?? null);
+        }
+        else {
+            // 新进程：插入到正确位置
+            const items = elProcessList.querySelectorAll('.process-item');
+            const newEl = createProcessItem(p);
+            elProcessList.insertBefore(newEl, items[idx] ?? null);
+        }
     });
 }
+/** 兼容旧调用 */
+function _renderProcessList() {
+    // 首次渲染强制全量
+    elProcessList.innerHTML = '';
+    patchProcessList();
+}
+// 保留函数引用防止 tree-shaking
+void _renderProcessList;
+// 绑定点击事件（patchProcessList 内对新节点单独绑定，此处仅作兼容保留）
+elProcessList.addEventListener('click', (e) => {
+    const item = e.target.closest('.process-item');
+    if (item) {
+        const pid = parseInt(item.dataset.pid ?? '0');
+        selectProcess(pid);
+    }
+});
 // ─── 选中进程 ─────────────────────────────────────────────────────────────────
 function selectProcess(pid) {
     selectedPid = pid;
-    renderProcessList();
+    // 只更新列表项的 active 状态，不重建 DOM（保持增量更新能正常工作）
+    elProcessList.querySelectorAll('.process-item').forEach(el => {
+        el.classList.toggle('active', el.dataset.pid === String(pid));
+    });
     const proc = processList.find(p => p.pid === pid);
     if (!proc)
         return;
@@ -192,7 +288,13 @@ function selectProcess(pid) {
 function renderNoSelection() {
     elMainContent.innerHTML = `
     <div class="no-selection">
-      <div class="no-selection-icon">🎮</div>
+      <div class="no-selection-icon">
+        <svg width="40" height="40" viewBox="0 0 40 40" fill="none" style="opacity:.25">
+          <rect x="4" y="10" width="32" height="24" rx="4" stroke="currentColor" stroke-width="2"/>
+          <path d="M14 22h12M20 18v8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          <circle cx="20" cy="6" r="2" fill="currentColor" opacity=".5"/>
+        </svg>
+      </div>
       <div class="no-selection-text">请从左侧选择一个 Minecraft 进程</div>
       <div class="no-selection-hint">未检测到进程时，请点击刷新重新扫描</div>
     </div>`;
@@ -349,6 +451,11 @@ bridge.on('error', ({ message }) => {
 bridge.on('themeChanged', ({ theme }) => {
     themeManager.applyToDOM(theme);
 });
+// ─── 事件：窗口状态变化（最大化/还原）────────────────────────────────────────
+bridge.on('windowState', ({ maximized }) => {
+    isMaximized = maximized;
+    updateMaximizeIcon();
+});
 // ─── 工具函数 ─────────────────────────────────────────────────────────────────
 function escHtml(s) {
     return s
@@ -363,6 +470,47 @@ function truncate(s, maxLen) {
 function clamp(v) {
     return Math.min(Math.max(v, 0), 100);
 }
+// ─── 侧边栏拖拽 Resize ────────────────────────────────────────────────────────
+;
+(function initSidebarResize() {
+    const sidebar = document.getElementById('sidebar');
+    const resizer = document.getElementById('sidebar-resizer');
+    const STORAGE_KEY = 'mcperf-sidebar-width';
+    const MIN_W = 140, MAX_W = 420;
+    // 恢复上次宽度
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+        const w = parseInt(saved);
+        if (w >= MIN_W && w <= MAX_W) {
+            document.documentElement.style.setProperty('--sidebar-width', `${w}px`);
+        }
+    }
+    let startX = 0, startW = 0;
+    resizer.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        startX = e.clientX;
+        startW = sidebar.getBoundingClientRect().width;
+        resizer.classList.add('dragging');
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+        const onMove = (ev) => {
+            const delta = ev.clientX - startX;
+            const newW = Math.min(Math.max(startW + delta, MIN_W), MAX_W);
+            document.documentElement.style.setProperty('--sidebar-width', `${newW}px`);
+        };
+        const onUp = (_ev) => {
+            document.removeEventListener('mousemove', onMove);
+            document.removeEventListener('mouseup', onUp);
+            resizer.classList.remove('dragging');
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+            const finalW = Math.min(Math.max(sidebar.getBoundingClientRect().width, MIN_W), MAX_W);
+            localStorage.setItem(STORAGE_KEY, String(Math.round(finalW)));
+        };
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onUp);
+    });
+})();
 // ─── 初始化 ───────────────────────────────────────────────────────────────────
 function init() {
     setStatus('正在扫描...');

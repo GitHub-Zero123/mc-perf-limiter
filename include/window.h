@@ -1,9 +1,9 @@
 #pragma once
 #ifndef WIN32_LEAN_AND_MEAN
-#  define WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
 #endif
 #ifndef NOMINMAX
-#  define NOMINMAX
+#define NOMINMAX
 #endif
 #include <windows.h>
 #include <dwmapi.h>
@@ -40,6 +40,9 @@ public:
 
     // 应用深色/浅色模式到标题栏（DWM 非客户区颜色）
     void applyDarkMode(bool dark);
+
+    // 应用毛玻璃效果（Win11 Mica）
+    void applyMicaEffect(bool enable, bool dark);
 
     // 设置窗口控制回调
     void setControlCallback(ControlCallback cb) { controlCb_ = std::move(cb); }

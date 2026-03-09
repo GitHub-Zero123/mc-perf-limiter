@@ -29,6 +29,9 @@ public:
     // 调整 WebView 大小以填满父窗口
     void resize(int width, int height);
 
+    // 设置背景颜色（用于毛玻璃主题切换）
+    void setBackgroundColor(uint8_t r, uint8_t g, uint8_t b, uint8_t a = 255);
+
     // 是否初始化完成
     bool isReady() const { return ready_; }
 

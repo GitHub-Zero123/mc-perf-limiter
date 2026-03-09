@@ -6,16 +6,21 @@
 // ─── 消息类型定义（与 ipc_types.h 保持一致）─────────────────────────────────
 
 export interface ProcessInfo {
-  pid:         number
-  name:        string
-  exePath:     string
-  cpuUsage:    number
-  gpuUsage:    number
-  cpuLimited:  boolean
-  gpuLimited:  boolean
-  cpuLimitPct: number
-  gpuLimitPct: number
-  iconBase64?: string   // exe 图标 Base64 PNG（可选）
+  pid:          number
+  name:         string
+  exePath:      string
+  cpuUsage:     number    // CPU 使用率 %
+  gpuUsage:     number    // GPU 使用率 %
+  memoryUsage:  number    // 内存使用量（字节）
+  ioReadBytes:  number    // IO 读取字节/秒
+  ioWriteBytes: number    // IO 写入字节/秒
+  netRecvBytes: number    // 网络接收字节/秒
+  netSendBytes: number    // 网络发送字节/秒
+  cpuLimited:   boolean
+  gpuLimited:   boolean
+  cpuLimitPct:  number
+  gpuLimitPct:  number
+  iconBase64?:  string    // exe 图标 Base64 PNG（可选）
 }
 
 export type Theme = 'dark' | 'light' | 'system'
@@ -36,6 +41,7 @@ export interface EventMap {
   limitRemoved: { pid: number }
   statsUpdate:  { pid: number; cpu: number; gpu: number }
   themeChanged: { theme: 'dark' | 'light' }
+  windowState:  { maximized: boolean }
   error:        { message: string }
 }
 
@@ -109,11 +115,17 @@ class Bridge {
       {
         pid: 1234, name: 'Minecraft.Windows.exe', exePath: 'C:\\...\\Minecraft.Windows.exe',
         cpuUsage: 45.2, gpuUsage: 12.1,
+        memoryUsage: 1024 * 1024 * 512, // 512MB
+        ioReadBytes: 1024 * 100, ioWriteBytes: 1024 * 50,
+        netRecvBytes: 1024 * 20, netSendBytes: 1024 * 10,
         cpuLimited: false, gpuLimited: false, cpuLimitPct: 0, gpuLimitPct: 0
       },
       {
         pid: 5678, name: 'javaw.exe', exePath: 'C:\\...\\javaw.exe',
         cpuUsage: 22.7, gpuUsage: 5.3,
+        memoryUsage: 1024 * 1024 * 256, // 256MB
+        ioReadBytes: 1024 * 30, ioWriteBytes: 1024 * 15,
+        netRecvBytes: 1024 * 5, netSendBytes: 1024 * 2,
         cpuLimited: true, gpuLimited: false, cpuLimitPct: 40, gpuLimitPct: 0
       },
     ]
@@ -129,6 +141,11 @@ class Bridge {
         ...p,
         cpuUsage: Math.random() * 80 + 5,
         gpuUsage: Math.random() * 30,
+        memoryUsage: Math.floor(Math.random() * 1024 * 1024 * 500 + 100 * 1024 * 1024),
+        ioReadBytes: Math.floor(Math.random() * 1024 * 200),
+        ioWriteBytes: Math.floor(Math.random() * 1024 * 100),
+        netRecvBytes: Math.floor(Math.random() * 1024 * 50),
+        netSendBytes: Math.floor(Math.random() * 1024 * 30),
       }))
       this.dispatch('processList', updated)
     }, 2000)

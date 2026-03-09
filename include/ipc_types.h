@@ -18,12 +18,13 @@ inline constexpr const char* CMD_WINDOW_CONTROL   = "windowControl";
 inline constexpr const char* CMD_GET_SYSTEM_THEME = "getSystemTheme";
 
 // ─── C++ → JS 事件 ─────────────────────────────────────────
-inline constexpr const char* EVT_PROCESS_LIST  = "processList";
-inline constexpr const char* EVT_LIMIT_APPLIED = "limitApplied";
-inline constexpr const char* EVT_LIMIT_REMOVED = "limitRemoved";
-inline constexpr const char* EVT_STATS_UPDATE  = "statsUpdate";
-inline constexpr const char* EVT_THEME_CHANGED = "themeChanged";
-inline constexpr const char* EVT_ERROR         = "error";
+inline constexpr const char* EVT_PROCESS_LIST     = "processList";
+inline constexpr const char* EVT_LIMIT_APPLIED    = "limitApplied";
+inline constexpr const char* EVT_LIMIT_REMOVED    = "limitRemoved";
+inline constexpr const char* EVT_STATS_UPDATE     = "statsUpdate";
+inline constexpr const char* EVT_THEME_CHANGED    = "themeChanged";
+inline constexpr const char* EVT_WINDOW_STATE     = "windowState";
+inline constexpr const char* EVT_ERROR            = "error";
 
 // ─── 数据结构 ───────────────────────────────────────────────
 
@@ -35,9 +36,9 @@ enum class Theme {
 
 inline const char* theme_to_str(Theme t) {
     switch (t) {
-        case Theme::Dark:   return "dark";
-        case Theme::Light:  return "light";
-        default:            return "system";
+        case Theme::Dark:  return "dark";
+        case Theme::Light: return "light";
+        default:           return "system";
     }
 }
 
@@ -49,15 +50,20 @@ inline Theme str_to_theme(const std::string& s) {
 
 struct ProcessInfo {
     uint32_t    pid;
-    std::string name;        // 进程名
-    std::string exePath;     // 完整路径
-    double      cpuUsage;    // CPU 使用率 %
-    double      gpuUsage;    // GPU 使用率 %
-    bool        cpuLimited;  // 是否已应用 CPU 限制
-    bool        gpuLimited;  // 是否已应用 GPU 限制
-    uint32_t    cpuLimitPct; // CPU 限制百分比
-    uint32_t    gpuLimitPct; // GPU 限制百分比
-    std::string iconBase64;  // exe 图标 Base64 PNG（可空）
+    std::string name;           // 进程名
+    std::string exePath;        // 完整路径
+    double      cpuUsage;       // CPU 使用率 %
+    double      gpuUsage;       // GPU 使用率 %
+    uint64_t    memoryUsage;    // 内存使用量（字节）
+    uint64_t    ioReadBytes;    // IO 读取字节/秒
+    uint64_t    ioWriteBytes;   // IO 写入字节/秒
+    uint64_t    netRecvBytes;   // 网络接收字节/秒
+    uint64_t    netSendBytes;   // 网络发送字节/秒
+    bool        cpuLimited;     // 是否已应用 CPU 限制
+    bool        gpuLimited;     // 是否已应用 GPU 限制
+    uint32_t    cpuLimitPct;    // CPU 限制百分比
+    uint32_t    gpuLimitPct;    // GPU 限制百分比
+    std::string iconBase64;     // exe 图标 Base64 PNG（可空）
 };
 
 struct LimitRequest {
