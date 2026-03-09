@@ -28,6 +28,8 @@ vcpkg_installed/
 ui/node_modules/
 ui/dist/
 ui/.vite/
+# generate.py 生成的内联资源（构建时自动生成，不纳入版本控制）
+ui/Resource/
 
 # ── IDE / 编辑器 ──────────────────────────────────────────────────────────────
 .vscode/

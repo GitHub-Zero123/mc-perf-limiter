@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <!--
+    WebView2 使用物理像素坐标，DPI 由宿主进程 SetProcessDpiAwarenessContext 负责；
+    此处不用 viewport scale，让 WebView2 按逻辑 CSS px 渲染（WebView2 默认100%缩放）。
+  -->
+  <title>MCPerfLimiter</title>
+</head>
+<body>
+  <div id="app">
+    <!-- 自制标题栏 -->
+    <div id="titlebar" class="titlebar">
+      <div class="titlebar-icon">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+          <rect x="2" y="2" width="12" height="12" rx="2" fill="var(--accent)"/>
+          <text x="8" y="11" text-anchor="middle" font-size="8" fill="white" font-family="monospace">MC</text>
+        </svg>
+      </div>
+      <span class="titlebar-title">MCPerfLimiter</span>
+      <div class="titlebar-spacer"></div>
+      <div class="titlebar-controls">
+        <button class="titlebar-btn" id="btn-theme" title="切换主题">
+          <svg id="icon-theme" width="14" height="14" viewBox="0 0 16 16">
+            <path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm0 1.5V13.5A5.5 5.5 0 0 1 8 2.5z" fill="currentColor"/>
+          </svg>
+        </button>
+        <button class="titlebar-btn" id="btn-minimize" title="最小化">
+          <svg width="10" height="1" viewBox="0 0 10 1"><rect width="10" height="1" fill="currentColor"/></svg>
+        </button>
+        <button class="titlebar-btn" id="btn-maximize" title="最大化">
+          <svg width="10" height="10" viewBox="0 0 10 10"><rect x="0.5" y="0.5" width="9" height="9" stroke="currentColor" fill="none"/></svg>
+        </button>
+        <button class="titlebar-btn titlebar-btn--close" id="btn-close" title="关闭">
+          <svg width="10" height="10" viewBox="0 0 10 10">
+            <line x1="0" y1="0" x2="10" y2="10" stroke="currentColor" stroke-width="1.2"/>
+            <line x1="10" y1="0" x2="0" y2="10" stroke="currentColor" stroke-width="1.2"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- 主体布局 -->
+    <div class="layout">
+      <!-- 侧边栏 -->
+      <aside class="sidebar">
+        <div class="sidebar-section">
+          <div class="sidebar-label">进程列表</div>
+          <div id="process-list" class="process-list">
+            <div class="process-empty">正在扫描...</div>
+          </div>
+        </div>
+        <div class="sidebar-bottom">
+          <button class="sidebar-refresh-btn" id="btn-refresh">⟳ 刷新</button>
+        </div>
+      </aside>
+
+      <!-- 主内容区 -->
+      <main class="main-content" id="main-content">
+        <div class="no-selection">
+          <div class="no-selection-icon">🎮</div>
+          <div class="no-selection-text">请从左侧选择一个 Minecraft 进程</div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <script type="module" src="./src/main.ts"></script>
+</body>
+</html>
